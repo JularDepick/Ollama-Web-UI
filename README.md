@@ -1,0 +1,2 @@
+# Ollama-Web-UI
+由豆包AI提供代码生成，我提供修正提示词，为本地Ollama客户端适配的网页版交互UI。依赖Ollama客户端的局域网端口API，实现与Ollama部署的本地模型或Ollama云模型进行带上下文的交互。
