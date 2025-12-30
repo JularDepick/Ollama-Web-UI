@@ -1,0 +1,719 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"><title>Ollama-Web-UI</title>
+<style>:root{--primary-color:#1677ff;--primary-light:#e8f3ff;--pinned-bg:#e6f7ff;--temp-pinned-bg:#f0f5ff;--text-main:#333;--text-secondary:#666;--text-light:#999;--text-danger:#e53e3e;--bg-white:#fff;--bg-gray:#f5f7fa;--border-color:#e5e7eb;--radius-main:12px;--radius-sm:6px;--primary-hover:#0f62d9;}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Microsoft YaHei',sans-serif;user-select:none;}body{background:var(--bg-gray);display:flex;flex-direction:column;height:100vh;overflow:hidden;color:var(--text-main);}::-webkit-scrollbar{display:none;}#chat-container{user-select:text;}input,textarea,select{user-select:auto;}
+.sidebar-toggle{background:var(--primary-color);color:#fff;border:none;border-radius:var(--radius-sm);width:32px;height:32px;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(22,119,255,0.3);transition:background 0.2s;}.sidebar-toggle:hover{background:var(--primary-hover);}
+#sidebar-toggle-outer{position:absolute;top:50%;left:16px;transform:translateY(-50%);}#sidebar-toggle-inner{position:static;margin-right:8px;box-shadow:0 1px rgba(22,119,255,0.3);}
+.sidebar{position:fixed;top:0;left:0;width:250px;height:100vh;background:var(--bg-white);border-right:1px solid var(--border-color);display:flex;flex-direction:column;transition:transform 0.3s ease;z-index:9998;box-shadow:0 0 12px rgba(0,0,0,0.08);padding-top:60px;}.sidebar.collapsed{transform:translateX(-100%);}
+.sidebar-header{padding:16px;background:var(--primary-color);display:flex;justify-content:flex-start;align-items:center;position:fixed;top:0;left:0;width:250px;height:60px;z-index:9999;}.sidebar-title{font-size:16px;font-weight:500;color:#fff;margin-left:12px;}
+.sidebar-controls{display:flex;gap:8px;position:absolute;right:16px;}.sidebar-btn{width:32px;height:32px;border-radius:var(--radius-sm);border:none;background:rgba(255,255,255,0.2);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}.sidebar-btn:hover{background:rgba(255,255,255,0.3);}
+.conversations-list{flex:1;overflow-y:auto;padding:8px;}.conversation-item{padding:12px 16px;border-radius:var(--radius-sm);margin-bottom:4px;cursor:pointer;transition:all 0.2s;position:relative;background:var(--bg-white);border:1px solid transparent;display:flex;justify-content:center;align-items:center;width:100%;}
+.conversation-item:hover{background:var(--primary-light);border-color:var(--primary-light);}.conversation-item.active{background:var(--primary-light);border-color:var(--primary-color);font-weight:500;}.conversation-item.pinned{background:var(--pinned-bg);}.conversation-item.temp-pinned{background:var(--temp-pinned-bg);}
+.conversation-info{flex:1;overflow:hidden;cursor:pointer;}.conversation-title{font-size:14px;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:none;background:transparent;outline:none;width:100%;pointer-events:none;opacity:0.9;}
+.conversation-title.editable{pointer-events:auto;opacity:1;border-bottom:1px solid var(--primary-color);}.conversation-time{font-size:12px;color:var(--text-light);margin-top:4px;}
+.conversation-more{width:28px;height:28px;border-radius:50%;background:transparent;border:none;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;flex-shrink:0;}.conversation-more:hover{background:var(--primary-light);}
+.conversation-actions{position:absolute;top:100%;right:0;background:var(--bg-white);border-radius:var(--radius-sm);box-shadow:0 2px 8px rgba(0,0,0,1);border:1px solid var(--border-color);display:none;flex-direction:column;z-index:100;width:120px;}.conversation-actions.show{display:flex;}
+.conversation-action-btn{padding:8px 12px;border:none;background:transparent;color:var(--text-main);cursor:pointer;text-align:left;font-size:13px;}.conversation-action-btn:hover{background:var(--primary-light);}
+.conversation-action-btn.pin-btn{color:var(--primary-color);}.conversation-action-btn.rename-btn{color:#1890ff;}.conversation-action-btn.delete-btn{color:#e53e3e;}.conversation-action-btn.confirm-delete{background:#e53e3e;color:#fff;}
+.main-content{flex:1;display:flex;flex-direction:column;overflow:hidden;border-radius:var(--radius-main);height:100vh;width:100%;z-index:100;}.chat-header{background:var(--primary-color);color:#fff;padding:12px 16px;text-align:center;font-weight:500;box-shadow:0 2px 8px rgba(22,119,255,0.2);position:relative;border-radius:var(--radius-main) var(--radius-main) 0 0;height:60px;display:flex;align-items:center;justify-content:center;}
+.current-config{padding:8px 16px;background:var(--primary-light);color:var(--primary-color);font-size:13px;text-align:center;border-bottom:1px solid var(--border-color);}
+.config-selector-toggle{position:absolute;top:50%;right:16px;transform:translateY(-50%);background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:6px;padding:3px 6px;font-size:13px;cursor:pointer;transition:background 0.2s;z-index:1002;width:auto;}.config-selector-toggle:hover{background:rgba(255,255,255,0.3);}
+.config-selector{position:fixed;top:60px;right:16px;z-index:1001;background:var(--bg-white);border-radius:var(--radius-sm);box-shadow:0 4px 16px rgba(0,0,0,0.1);max-height:0;overflow:hidden;transition:max-height 0.3s ease-out;border:1px solid var(--border-color);width:calc(100% - 32px);max-width:500px;}.config-selector.open{max-height:600px;overflow-y:auto;}
+.config-selector-inner{padding:16px;}.config-item{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-direction:column;}
+.config-item-row{display:flex;align-items:center;gap:12px;width:100%;}.config-label{font-size:14px;color:var(--text-main);width:90px;text-align:right;flex-shrink:0;}
+.config-input{flex:1;padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:14px;outline:none;transition:border 0.2s;background:var(--bg-white);}.config-input:focus{border-color:var(--primary-color);box-shadow:0 0 0 2px rgba(22,119,255,0.1);}
+.config-btn{padding:8px 16px;background:var(--primary-color);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;cursor:pointer;transition:background 0.2s;flex-shrink:0;margin-left:8px;}.config-btn:hover{background:var(--primary-hover);}.config-btn.danger{background:#e53e3e;}.config-btn.danger:hover{background:#c93737;}
+.stream-speed-slider,.context-length-slider{flex:1;height:8px;-webkit-appearance:none;background:var(--bg-gray);border-radius:4px;outline:none;}
+.stream-speed-slider::-webkit-slider-thumb,.context-length-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--primary-color);cursor:pointer;box-shadow:0 0 4px rgba(22,119,255,0.5);}
+.stream-speed-text,.context-length-text,.switch-text{font-size:12px;color:var(--text-secondary);width:90px;text-align:left;}
+.switch-control{width:40px;height:20px;appearance:none;background:var(--bg-gray);border-radius:10px;position:relative;cursor:pointer;transition:background 0.2s;}.switch-control:checked{background:var(--primary-color);}.switch-control::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:2px;left:2px;transition:left 0.2s;}.switch-control:checked::after{left:22px;}
+#host-error-tip{width:calc(100% - 90px);margin-left:90px;margin-top:1px;padding-left:12px;font-size:12px;color:#e53e3e;line-height:1.2;display:none;}
+#host-error-tip.show{display:block;}
+.chat-temp-tip{text-align:center;font-size:14px;color:#e53e3e;padding:8px 0;margin:10px auto;line-height:1.5;display:none;width:100%;max-width:600px;}
+.chat-temp-tip.show{display:block;}
+.storage-collapse{margin-top:20px;border-top:1px solid var(--border-color);padding-top:16px;}.storage-collapse-header{font-size:14px;color:var(--primary-color);font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;}.storage-collapse-header::before{content:'+';font-size:16px;line-height:1;transition:transform 0.2s;}.storage-collapse-header.expanded::before{transform:rotate(45deg);}
+.storage-collapse-body{margin-top:12px;display:none;}.storage-collapse-body.expanded{display:block;}.storage-btn-group{display:flex;gap:8px;margin-left:90px;}
+.chat-container{flex:1;padding:20px;overflow-y:auto;width:100%;padding-bottom:90px;box-sizing:border-box;line-height:1.6;}.message{margin-bottom:20px;max-width:75%;display:flex;position:relative;}.message.system-message,.message.ai-error{max-width:100%;}.message.ai-error{justify-content:flex-start;}
+.message-avatar{width:40px;height:40px;border-radius:50%;margin-right:12px;margin-top:4px;flex-shrink:0;background:var(--primary-light);display:flex;align-items:center;justify-content:center;color:var(--primary-color);font-weight:bold;}.user-message .message-avatar{background:var(--primary-color);color:#fff;margin:4px 0 0 12px;}
+.user-message{flex-direction:row-reverse;margin-left:auto;}.message-content{position:relative;padding:14px 18px;border-radius:var(--radius-main);line-height:1.6;word-break:break-word;font-size:15px;width:100%;}
+.system-message .message-content{background:#f0f8ff;color:#1677ff;border:1px solid var(--border-color);}.user-message .message-content{background:#1677ff;color:#fff;border-top-right-radius:4px;}
+.ai-message .message-content{background:#fff;color:#333;border-top-left-radius:4px;border:1px solid #e5e7eb;box-shadow:0 2px 4px rgba(0,0,0,0.05);}
+.msg-controls{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;flex-wrap:nowrap;align-items:center;}.ai-message .msg-controls{justify-content:flex-start;padding-left:2px;width:100%;}.user-message .msg-controls{justify-content:flex-end;padding-right:2px;width:100%;}
+.copy-btn{padding:2px 8px;border:1px solid var(--primary-color);background:transparent;color:var(--primary-color);border-radius:4px;font-size:12px;cursor:pointer;transition:all 0.2s;}.copy-btn:hover{background:var(--primary-color);color:#fff;}
+.think-duration{color:#666;margin:0 6px;}.message-time{color:#999;margin:0 4px;}
+.msg-more-wrapper{position:relative;display:inline-block;}.msg-more-btn{width:24px;height:24px;border:none;background:transparent;color:#666;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.2s;flex-shrink:0;}.msg-more-btn:hover{background:#f5f7fa;}
+.msg-more-menu{position:absolute;top:100%;left:0;background:#fff;border-radius:var(--radius-sm);box-shadow:0 2px 8px rgba(0,0,0,0.1);z-index:999;list-style:none;padding:4px 0;display:none;width:100px;box-sizing:border-box;border:1px solid var(--border-color);}.msg-more-menu.show{display:block;}
+.msg-more-menu li{padding:6px 12px;border:none;background:transparent;color:#333;cursor:pointer;transition:background 0.2s;}.msg-more-menu li:hover{background:#f5f7fa;}.msg-more-menu li.delete-item{color:#e53e3e;}.msg-more-menu li.confirm-delete{background:#e53e3e;color:#fff;}
+.loading{margin-bottom:20px;max-width:75%;display:flex;}.loading-content{background:#fff;color:#333;padding:14px 18px;border-radius:var(--radius-main);border-top-left-radius:4px;display:flex;align-items:center;gap:8px;border:1px solid #e5e7eb;box-shadow:0 2px 4px rgba(0,0,0,0.05);}
+.think-time{font-size:12px;color:#666;margin-left:8px;}.loading-dot{width:8px;height:8px;border-radius:50%;background:#1677ff;animation:loading 1.4s infinite ease-in-out both;}.loading-dot:nth-child(1){animation-delay:-0.32s;}.loading-dot:nth-child(2){animation-delay:-0.16s;}
+@keyframes loading{0%,80%,100%{transform:scale(0);}40%{transform:scale(1);}}.copy-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;z-index:10000;display:none;}.copy-toast.show{display:block;animation:toastFade 2s ease-in-out forwards;}
+@keyframes toastFade{0%{opacity:0;bottom:70px;}10%{opacity:1;bottom:80px;}90%{opacity:1;bottom:80px;}100%{opacity:0;bottom:70px;}}
+/* ✅ 修复1：移除输入框收展的过渡动画（删除transition属性） */
+.input-container{position:fixed;bottom:0;left:0;right:0;padding:0 16px 16px;background:#fff;border-top:1px solid var(--border-color);box-shadow:0 -2px 12px rgba(0,0,0,0.05);border-radius:12px 12px 0 0;width:100%;z-index:998;}.input-container.collapsed{bottom:-100%;}
+#input-toggle-btn{width:75px!important;height:22px!important;border:none;border-radius:var(--radius-sm);background:#1677ff;color:#fff;font-size:13px!important;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:2px!important;margin:0!important;box-sizing:border-box;z-index:999;}
+#input-toggle-btn.inner-btn{position:absolute;left:0;top:0;border-radius:6px!important;}
+/* ✅ 修复2：关键参数修改 fixed-btn → bottom:0px!important; 贴底显示 */
+#input-toggle-btn.fixed-btn{position:fixed;left:0!important;bottom:0px!important;z-index:1000;box-shadow:0 2px 8px rgba(0,0,0,0.2);margin:0!important;padding:2px!important;border-radius:6px!important;}
+.input-wrapper{display:flex;align-items:flex-end;gap:12px;margin-top:35px!important;}#message-input{flex:1;padding:14px 18px;border:1px solid var(--border-color);border-radius:var(--radius-main);font-size:15px;outline:none;resize:none;height:56px;max-height:200px;background:#f5f7fa;}
+#message-input:focus{border-color:#1677ff;box-shadow:0 0 0 2px rgba(22,119,255,0.1);background:#fff;}#send-button{width:56px;height:56px;border:none;border-radius:50%;background:#1677ff;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
+#send-button:hover{background:#0f62d9;}#send-button:disabled{background:#e5e7eb;cursor:not-allowed;}
+@media (max-width:768px){.sidebar{width:250px;}.config-selector{width:calc(100% - 32px);max-width:100%;}.chat-container{padding:12px;padding-bottom:80px;}.message{max-width:85%;}.message-avatar{width:36px;height:36px;}#message-input{height:48px;font-size:14px;}#send-button{width:48px;height:48px;}#input-toggle-btn{width:70px;height:20px;font-size:12px!important;}.storage-btn-group{flex-direction:column;margin-left:0;}#host-error-tip{width:100%;margin-left:0;padding-left:0;}}
+</style></head>
+<body><div class="sidebar collapsed"><div class="sidebar-header"><button id="sidebar-toggle-inner" class="sidebar-toggle">☰</button><div class="sidebar-title">对话记录</div><div class="sidebar-controls"><button class="sidebar-btn new-btn" title="新建对话">+</button></div></div><div class="conversations-list" id="conversations-list"></div></div>
+<div class="main-content"><div class="chat-header"><button id="sidebar-toggle-outer" class="sidebar-toggle">☰</button>Ollama-Web-UI<button class="config-selector-toggle">配置选项</button><div class="config-selector" id="config-selector"><div class="config-selector-inner">
+    <div class="config-item">
+        <div class="config-item-row">
+            <label class="config-label">服务地址</label>
+            <input type="text" id="ollama-host-input" class="config-input" placeholder="示例: http://192.168.1.1:114514" spellcheck="false">
+        </div>
+        <div id="host-error-tip">服务地址校验失败</div>
+    </div>
+    
+    <div class="config-item">
+        <div class="config-item-row">
+            <label class="config-label">切换模型</label>
+            <select id="model-select" class="config-input"></select>
+        </div>
+    </div>
+
+    <div class="config-item">
+        <div class="config-item-row">
+            <label class="config-label">流式速度</label>
+            <input type="range" id="stream-speed-slider" class="stream-speed-slider" min="0" max="4" step="1" value="1">
+            <span class="stream-speed-text" id="stream-speed-text">16字/秒</span>
+        </div>
+    </div>
+
+    <div class="config-item">
+        <div class="config-item-row">
+            <label class="config-label">定位流式输出</label>
+            <input type="checkbox" id="stream-auto-scroll" class="switch-control" checked=false>
+            <span class="switch-text" id="stream-auto-scroll-text">已关闭</span>
+        </div>
+    </div>
+
+    <div class="config-item">
+        <div class="config-item-row">
+            <label class="config-label">上下文长度</label>
+            <input type="range" id="context-length-slider" class="context-length-slider" min="0" max="6" step="1" value="1">
+            <span class="context-length-text" id="context-length-text">8k</span>
+        </div>
+    </div>
+
+    <div class="storage-collapse">
+        <div class="storage-collapse-header" id="storage-collapse-header">本地储存管理</div>
+        <div class="storage-collapse-body" id="storage-collapse-body">
+            <div class="storage-btn-group">
+                <button class="config-btn" id="clear-config-btn">清除配置选项储存数据</button>
+                <button class="config-btn danger" id="clear-all-btn">清除所有相关储存数据</button>
+            </div>
+        </div>
+    </div>
+</div></div></div>
+<div class="current-config" id="current-config">未选择模型 | 新对话</div>
+<div id="chat-temp-tip" class="chat-temp-tip">服务地址为空或无效，无法发送消息！</div>
+<div class="chat-container" id="chat-container"></div>
+<div class="input-container" id="input-container"><button id="input-toggle-btn" class="inner-btn">收起输入框</button><div class="input-wrapper"><textarea id="message-input" placeholder="输入消息(Enter发送，Shift+Enter换行)..." spellcheck="false"></textarea><button id="send-button">➤</button></div></div></div>
+<script>const DEBUG_MODE=true,LOG_STYLES={USER:'color:#0099ff;font-weight:bold;',MODEL:'color:#00cc66;font-weight:bold;',DATA:'color:#9933ff;font-weight:bold;',SENSITIVE:'color:#ffcc00;font-weight:bold;',ERROR:'color:#ff3333;font-weight:bold;'},LOG_PREFIX={USER:'[用户操作] ',MODEL:'[模型交互] ',DATA:'[数据变更] ',SENSITIVE:'[敏感操作] ',ERROR:'[捕获错误] '},CONST_CONFIG={MODEL_LIST_TIMEOUT:15000,MSG_REPLY_TIMEOUT:120000,STREAM_SPEED_MAP:[0,16,32,64,128],STREAM_TEXT_MAP:['关闭流式','16字/秒','32字/秒','64字/秒','128字/秒'],CONTEXT_LENGTH_MAP:[4096,8192,16384,32768,65536,131072,262144],CONTEXT_LENGTH_TEXT_MAP:['4k','8k','16k','32k','64k','128k','256k'],OLLAMA_SUPPORT_CONTEXT_PARAM:true,STREAM_AUTO_SCROLL_TEXT:['已关闭','已开启']};
+const STORAGE_KEYS = {
+    conversations: 'Ollama-Web-UI-Conversations',
+    lastActiveChat: 'Ollama-Web-UI-LastActiveChat',
+    selectedModel: 'Ollama-Web-UI-Config-SelectedModel',
+    ollamaHost: 'Ollama-Web-UI-Config-OllamaHost',
+    streamSpeed: 'Ollama-Web-UI-Config-StreamSpeed',
+    contextLength: 'Ollama-Web-UI-Config-ContextLength',
+    streamAutoScroll: 'Ollama-Web-UI-Config-StreamAutoScroll'
+};
+const DEFAULT_CONFIG = {
+    ollamaHost: '',
+    selectedModel: '',
+    streamSpeed: 1,
+    streamAutoScroll: 0,
+    contextLength: 1
+};
+let isWaitingModelReply = false, isTempTipShowing = false;
+let currentConversationId='',currentModel='',conversations={},OLLAMA_HOST='',lastActiveConvId='',streamSpeed=DEFAULT_CONFIG.streamSpeed,contextLength=DEFAULT_CONFIG.contextLength,streamAutoScroll=DEFAULT_CONFIG.streamAutoScroll,thinkTimerMap=new Map(),currentStreamingDom=null,scrollLockHandler=null,inputIsCollapsed=false;
+const sidebar=document.querySelector('.sidebar'),sidebarToggleInner=document.getElementById('sidebar-toggle-inner'),sidebarToggleOuter=document.getElementById('sidebar-toggle-outer'),conversationsList=document.getElementById('conversations-list'),newChatBtn=document.querySelector('.sidebar-btn.new-btn'),currentConfig=document.getElementById('current-config'),chatContainer=document.getElementById('chat-container'),configSelectorToggle=document.querySelector('.config-selector-toggle'),configSelector=document.getElementById('config-selector'),ollamaHostInput=document.getElementById('ollama-host-input'),modelSelect=document.getElementById('model-select'),streamSpeedSlider=document.getElementById('stream-speed-slider'),streamSpeedText=document.getElementById('stream-speed-text'),streamAutoScrollSwitch=document.getElementById('stream-auto-scroll'),streamAutoScrollText=document.getElementById('stream-auto-scroll-text'),contextLengthSlider=document.getElementById('context-length-slider'),contextLengthText=document.getElementById('context-length-text'),inputContainer=document.getElementById('input-container'),inputToggleBtn=document.getElementById('input-toggle-btn'),messageInput=document.getElementById('message-input'),sendButton=document.getElementById('send-button');
+const hostErrorTip = document.getElementById('host-error-tip');
+const storageCollapseHeader = document.getElementById('storage-collapse-header');
+const storageCollapseBody = document.getElementById('storage-collapse-body');
+const clearConfigBtn = document.getElementById('clear-config-btn');
+const clearAllBtn = document.getElementById('clear-all-btn');
+const chatTempTip = document.getElementById('chat-temp-tip');
+
+const log=(type,msg)=>DEBUG_MODE&&console.log(`%c${LOG_PREFIX[type]}${msg}`,LOG_STYLES[type]),userLog=(msg)=>log('USER',msg),modelLog=(msg)=>log('MODEL',msg),dataLog=(msg)=>log('DATA',msg),sensitiveLog=(msg)=>log('SENSITIVE',msg),errorLog=(msg)=>log('ERROR',msg);
+const updateConfigInfo=()=>{
+    const conv=currentConversationId?conversations[currentConversationId]:null;
+    const convTitle=conv?(conv.title||getConversationTitle(conv)):'新对话';
+    const modelName=currentModel||'未选择模型';
+    currentConfig.textContent=`${modelName} | ${convTitle}`;
+    dataLog('顶部状态栏更新：'+currentConfig.textContent);
+};
+const generateConversationId=()=>'chat_'+Date.now()+'_'+Math.random().toString(36).substr(2,8),formatTime=(time)=>new Date(time).toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}),getConversationTitle=(conv)=>{
+    if(!conv||!conv.messages.length)return'新对话';
+    const firstUserMsg=conv.messages.find(m=>m.role==='user');
+    return firstUserMsg?firstUserMsg.content.slice(0,20)+(firstUserMsg.content.length>20?'...':''):'新对话';
+},clearTempPinned=()=>{
+    document.querySelectorAll('.conversation-item.temp-pinned').forEach(el=>el.classList.remove('temp-pinned'));
+},formatSeconds=(s)=>s<=0?'0秒':`${s}秒`,resetAllDeleteButtons=()=>{
+    document.querySelectorAll('.delete-item, .conversation-action-btn.delete-btn').forEach(btn=>{
+        btn.classList.remove('confirm-delete');
+        btn.textContent=btn.classList.contains('conversation-action-btn')?'删除对话':'删除';
+    });
+};
+
+const collapseAllPanels = () => {
+    sidebar.classList.add('collapsed');
+    configSelector.classList.remove('open');
+    document.querySelectorAll('.msg-more-menu.show').forEach(menu => menu.classList.remove('show'));
+    document.querySelectorAll('.conversation-actions.show').forEach(menu => menu.classList.remove('show'));
+    resetAllDeleteButtons();
+    userLog('面板收起完成 → 左侧栏+配置栏+更多操作栏收起，所有删除按钮已重置为初始状态');
+};
+chatContainer.addEventListener('click', collapseAllPanels);
+inputContainer.addEventListener('click', collapseAllPanels);
+
+document.addEventListener('click',(e)=>{
+    const openMenus=document.querySelectorAll('.msg-more-menu.show, .conversation-actions.show');
+    openMenus.forEach(menu=>!menu.contains(e.target)&&!e.target.closest('.msg-more-wrapper, .conversation-more')&&menu.classList.remove('show'));
+    const sidebarOpen=!sidebar.classList.contains('collapsed');
+    const clickInSidebar=sidebar.contains(e.target);
+    const clickToggleBtn=sidebarToggleOuter.contains(e.target)||sidebarToggleInner.contains(e.target);
+    const clickSidebarBlank=clickInSidebar&&(e.target===sidebar||(e.target.closest('.conversations-list')&&!e.target.closest('.conversation-item, .sidebar-header')));
+    if(clickSidebarBlank){
+        document.querySelectorAll('.conversation-actions.show').forEach(menu=>menu.classList.remove('show'));
+        userLog('点击左侧栏空白区域 → 关闭内部展开的折叠菜单');
+    }
+    if(sidebarOpen&&!clickInSidebar&&!clickToggleBtn){
+        sidebar.classList.add('collapsed');
+        userLog('点击左侧栏外区域 → 左侧栏已收起');
+    }
+});
+
+const alignMsgToInputTop = () => { chatContainer.scrollTop = chatContainer.scrollHeight; };
+const lockChatScroll=()=>{
+    if(scrollLockHandler)return;
+    scrollLockHandler = () => { chatContainer.scrollTop = chatContainer.scrollHeight; };
+    chatContainer.addEventListener('scroll', scrollLockHandler);
+    userLog('开启流式输出滚动锁定 → 实时滚到底部');
+};
+const unlockChatScroll=()=>{
+    if(scrollLockHandler){
+        chatContainer.removeEventListener('scroll', scrollLockHandler);
+        scrollLockHandler=null;
+        userLog('关闭流式输出滚动锁定');
+    }
+};
+const toggleInputContainer=()=>{
+    inputIsCollapsed=!inputIsCollapsed;
+    if(inputIsCollapsed){
+        inputContainer.classList.add('collapsed');
+        inputToggleBtn.classList.remove('inner-btn');
+        inputToggleBtn.classList.add('fixed-btn');
+        inputToggleBtn.textContent='展开输入框';
+        document.body.appendChild(inputToggleBtn);
+        userLog('输入框已收起 → 不影响聊天区展示与滚动');
+    }else{
+        inputContainer.classList.remove('collapsed');
+        inputToggleBtn.classList.remove('fixed-btn');
+        inputToggleBtn.classList.add('inner-btn');
+        inputToggleBtn.textContent='收起输入框';
+        inputContainer.prepend(inputToggleBtn);
+        userLog('输入框已展开 → 聊天区保持正常展示');
+    }
+};
+
+const getAvailableConversationName=(baseName)=>{
+    let pureName = baseName.trim().slice(0,8) || '新对话';
+    let allNames = Object.values(conversations).map(conv => conv.title);
+    let newName = pureName;
+    let n = 1;
+    while(allNames.includes(newName)){ newName = `${pureName}${n}`; n++; }
+    dataLog(`会话名称查重完成：最终可用名称【${newName}】`);
+    return newName;
+};
+
+const loadFromStorage=()=>{
+    userLog('开始加载本地存储数据');
+    const convStr=localStorage.getItem(STORAGE_KEYS.conversations);
+    if(convStr){
+        conversations=JSON.parse(convStr);
+        Object.keys(conversations).forEach(id=>{
+            if(!conversations[id].hasOwnProperty('pinned'))conversations[id].pinned=false;
+            if(conversations[id].messages)conversations[id].messages.map(m=>({id:m.id||Date.now()+Math.random().toString(36).substr(2,8),role:m.role,content:m.content,sendTime:m.sendTime||Date.now(),thinkDuration:m.thinkDuration||0}));
+        });
+        const pinnedConvs=Object.values(conversations).filter(c=>c.pinned).sort((a,b)=>b.updateTime - a.updateTime);
+        const normalIds=Object.keys(conversations).filter(id=>!conversations[id].pinned).sort((a,b)=>b-a);
+        const allIds=[...pinnedConvs.map(c=>c.id),...normalIds];
+        const defaultId=allIds.length>0?allIds[0]:'';
+        const lastActiveId=localStorage.getItem(STORAGE_KEYS.lastActiveChat);
+        currentConversationId=(lastActiveId&&conversations[lastActiveId])?lastActiveId:defaultId;
+        lastActiveConvId=currentConversationId;
+        dataLog(`本地存储加载成功：当前激活对话ID【${currentConversationId}】`);
+    }else{
+        const newName=getAvailableConversationName('新对话');
+        const newId=generateConversationId();
+        conversations[newId]={id:newId,title:newName,model:'',createTime:Date.now(),updateTime:Date.now(),messages:[],pinned:false};
+        currentConversationId=newId;
+        saveConversations();
+        dataLog('本地无对话数据，已初始化新对话');
+    }
+    currentModel=localStorage.getItem(STORAGE_KEYS.selectedModel) || DEFAULT_CONFIG.selectedModel;
+    OLLAMA_HOST=localStorage.getItem(STORAGE_KEYS.ollamaHost) || DEFAULT_CONFIG.ollamaHost;
+    streamSpeed=parseInt(localStorage.getItem(STORAGE_KEYS.streamSpeed)) || DEFAULT_CONFIG.streamSpeed;
+    streamSpeed=streamSpeed<0||streamSpeed>4?DEFAULT_CONFIG.streamSpeed:streamSpeed;
+    contextLength=parseInt(localStorage.getItem(STORAGE_KEYS.contextLength)) || DEFAULT_CONFIG.contextLength;
+    contextLength=contextLength<0||contextLength>6?DEFAULT_CONFIG.contextLength:contextLength;
+    streamAutoScroll=parseInt(localStorage.getItem(STORAGE_KEYS.streamAutoScroll)) || DEFAULT_CONFIG.streamAutoScroll;
+    
+    ollamaHostInput.value = OLLAMA_HOST;
+    streamSpeedSlider.value = streamSpeed;
+    streamSpeedText.textContent = CONST_CONFIG.STREAM_TEXT_MAP[streamSpeed];
+    streamAutoScrollSwitch.checked = streamAutoScroll === 1;
+    streamAutoScrollText.textContent = CONST_CONFIG.STREAM_AUTO_SCROLL_TEXT[streamAutoScroll];
+    contextLengthSlider.value = contextLength;
+    contextLengthText.textContent = CONST_CONFIG.CONTEXT_LENGTH_TEXT_MAP[contextLength];
+    dataLog(`本地配置加载完成：模型地址→${OLLAMA_HOST || '未配置'}，流式速度→${CONST_CONFIG.STREAM_TEXT_MAP[streamSpeed]}，定位流式→${CONST_CONFIG.STREAM_AUTO_SCROLL_TEXT[streamAutoScroll]}，上下文→${CONST_CONFIG.CONTEXT_LENGTH_TEXT_MAP[contextLength]}`);
+};
+
+const saveConversations=()=>{
+    localStorage.setItem(STORAGE_KEYS.conversations,JSON.stringify(conversations));
+    currentConversationId&&localStorage.setItem(STORAGE_KEYS.lastActiveChat,currentConversationId);
+    dataLog('对话数据已保存至本地存储');
+},saveStreamSpeed=(val)=>{
+    streamSpeed=val;
+    localStorage.setItem(STORAGE_KEYS.streamSpeed,val);
+    streamSpeedText.textContent=CONST_CONFIG.STREAM_TEXT_MAP[val];
+    dataLog('流式输出速度已更新为：'+CONST_CONFIG.STREAM_TEXT_MAP[val]);
+    currentStreamingDom&&completeStreamMessage(currentStreamingDom,currentStreamingDom.dataset.fullContent);
+},saveContextLength=(val)=>{
+    contextLength=val;
+    localStorage.setItem(STORAGE_KEYS.contextLength,val);
+    contextLengthText.textContent=CONST_CONFIG.CONTEXT_LENGTH_TEXT_MAP[val];
+    dataLog('上下文长度已更新为：'+CONST_CONFIG.CONTEXT_LENGTH_TEXT_MAP[val]);
+},saveStreamAutoScroll=(val)=>{
+    streamAutoScroll=val?1:0;
+    localStorage.setItem(STORAGE_KEYS.streamAutoScroll,streamAutoScroll);
+    streamAutoScrollText.textContent=CONST_CONFIG.STREAM_AUTO_SCROLL_TEXT[streamAutoScroll];
+    dataLog('流式输出定位功能'+(val?'开启':'关闭'));
+},saveSelectedModel=(model)=>{
+    currentModel=model;
+    localStorage.setItem(STORAGE_KEYS.selectedModel,model);
+    currentConversationId&&(conversations[currentConversationId].model=model,saveConversations());
+    updateConfigInfo();
+    dataLog('模型已切换为：'+model);
+};
+
+// ✅ 核心重构：服务地址校验新逻辑（空值实时恢复、无效值收起恢复、有效值即时生效）
+const saveOllamaHost=async()=>{
+    const oldHost = OLLAMA_HOST; // 保存原始有效地址
+    const newHost = ollamaHostInput.value.trim();
+    hostErrorTip.classList.remove('show');
+
+    // 场景1：地址为空 → 实时恢复原地址到UI，不修改存储，直接返回
+    if (!newHost) {
+        ollamaHostInput.value = oldHost;
+        errorLog('服务地址为空，已实时恢复为原地址');
+        return;
+    }
+
+    const urlReg = /^https?:\/\/.+$/;
+    // 场景2：格式无效 → 显示错误提示，不更新UI、不修改存储，等待配置栏收起恢复
+    if (!urlReg.test(newHost)) {
+        const tipText = '❌ 格式无效，请输入http/https开头的合法URL';
+        hostErrorTip.textContent = tipText;
+        hostErrorTip.classList.add('show');
+        errorLog(tipText);
+        return;
+    }
+
+    // 场景3：格式有效，校验连通性
+    try {
+        const isValid = await checkHostValid(newHost);
+        if (isValid) {
+            // 连通有效 → 更新UI、存储、应用新地址，加载模型列表
+            OLLAMA_HOST = newHost;
+            localStorage.setItem(STORAGE_KEYS.ollamaHost, newHost);
+            await loadModelList();
+            dataLog(`服务地址校验通过：${newHost}，已更新存储并加载模型列表`);
+        } else {
+            // 连通无效 → 显示错误提示，不更新UI、不修改存储，等待配置栏收起恢复
+            const tipText = '❌ 地址连通失败，请检查地址是否正确';
+            hostErrorTip.textContent = tipText;
+            hostErrorTip.classList.add('show');
+            errorLog(tipText);
+        }
+    } catch (e) {
+        // 校验异常 → 同无效处理逻辑
+        const tipText = '❌ 校验异常：' + e.message;
+        hostErrorTip.textContent = tipText;
+        hostErrorTip.classList.add('show');
+        errorLog(tipText);
+    }
+};
+
+// ✅ 核心优化：配置栏收起时 → 同步收起内部所有展开的折叠栏（本次重点）
+configSelectorToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = configSelector.classList.contains('open');
+    configSelector.classList.toggle('open');
+    
+    // ✅ 关键逻辑：配置栏收起时，强制收起内部所有折叠栏
+    if (!isOpen) {
+        storageCollapseHeader.classList.remove('expanded');
+        storageCollapseBody.classList.remove('expanded');
+        userLog('配置栏已收起，同步收拢内部「本地储存管理」折叠栏');
+    }
+
+    // 原有逻辑：无效地址恢复原地址
+    if (!isOpen) {
+        const currentInputVal = ollamaHostInput.value.trim();
+        if (currentInputVal !== OLLAMA_HOST) {
+            ollamaHostInput.value = OLLAMA_HOST;
+            hostErrorTip.classList.remove('show');
+            userLog('配置栏已收起，无效地址已恢复为原地址');
+        }
+    }
+    userLog('配置面板' + (configSelector.classList.contains('open') ? '展开' : '收起'));
+});
+
+const checkHostValid=(host)=>new Promise(resolve=>{
+    try{
+        const controller=new AbortController();
+        setTimeout(()=>controller.abort(),CONST_CONFIG.MODEL_LIST_TIMEOUT);
+        fetch(`${host}/api/tags`,{method:'GET',signal:controller.signal}).then(res=>resolve(res.ok)).catch(()=>resolve(false));
+    }catch(e){ errorLog(`地址校验异常：${e.message}`); resolve(false); }
+});
+
+const showSystemMessage=(content,actions=null)=>{
+    const dom=document.createElement('div');
+    dom.className='message system-message';
+    dom.dataset.system='true';
+    let actionHtml='';
+    if(actions&&Array.isArray(actions)){
+        actionHtml='<div class="system-actions">';
+        actions.forEach(act=>actionHtml+=`<button class="system-action-btn ${act.type||''}" data-action="${act.key}">${act.text}</button>`);
+        actionHtml+='</div>';
+    }
+    dom.innerHTML=`<div class="message-avatar">💡</div><div class="message-wrapper"><div class="message-content">${content}${actionHtml}</div><div class="msg-controls"><span class="message-time">${formatTime(Date.now())}</span></div></div>`;
+    chatContainer.appendChild(dom);
+    actions&&Array.isArray(actions)&&actions.forEach(act=>act.callback&&dom.querySelector(`[data-action="${act.key}"]`).addEventListener('click',()=>{ act.callback(); dom.remove(); }));
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    userLog('系统消息已展示：'+content);
+    return dom;
+},clearSystemMessages=()=>{
+    document.querySelectorAll('.message.system-message').forEach(el=>el.remove());
+    userLog('所有系统消息已清除');
+};
+
+const completeStreamMessage=(dom,fullContent)=>{
+    if(!dom)return;
+    const timerId=dom.dataset.timerId;
+    timerId&&clearInterval(timerId);
+    dom.querySelector('.message-content').innerHTML=fullContent.replace(/\n/g,'<br>');
+    dom.dataset.streaming='false';
+    unlockChatScroll();
+    currentStreamingDom===dom&&(currentStreamingDom=null);
+    userLog('流式输出已完成/跳过流式输出');
+    if(streamAutoScroll === 1) chatContainer.scrollTop = chatContainer.scrollHeight;
+    updateStreamButtonStatus();
+},resetStreamMessage=(dom,fullContent,startIdx=0)=>{
+    if(!dom||streamSpeed===0)return;
+    currentStreamingDom&&currentStreamingDom!==dom&&completeStreamMessage(currentStreamingDom,currentStreamingDom.dataset.fullContent);
+    alignMsgToInputTop();
+    streamAutoScroll===1&&lockChatScroll();
+    const oldTimer=dom.dataset.timerId;
+    oldTimer&&clearInterval(oldTimer);
+    const speed=CONST_CONFIG.STREAM_SPEED_MAP[streamSpeed];
+    const charList=splitContentByChar(fullContent);
+    let currentIdx=startIdx;
+    const timer=setInterval(()=>{
+        if(currentIdx>=charList.length){
+            clearInterval(timer);
+            dom.dataset.streaming='false';
+            unlockChatScroll();
+            currentStreamingDom=null;
+            userLog('流式输出自然结束');
+            if(streamAutoScroll === 1) chatContainer.scrollTop = chatContainer.scrollHeight;
+            updateStreamButtonStatus();
+            return;
+        }
+        const showContent=charList.slice(0,currentIdx+1).join('').replace(/\n/g,'<br>');
+        dom.querySelector('.message-content').innerHTML=showContent;
+        dom.dataset.currentIndex=currentIdx;
+        currentIdx++;
+    },1000/speed);
+    dom.dataset.timerId=timer;
+    dom.dataset.streaming='true';
+    currentStreamingDom=dom;
+    userLog('开始流式输出，切换按钮文本为「跳过流式输出」');
+    updateStreamButtonStatus();
+},splitContentByChar=(content)=>{
+    const result=[];let word='';
+    for(let ch of content){
+        if(/[\u4e00-\u9fa5，。！？；：""''（）【】、·]/.test(ch)){ word&&result.push(word);word='';result.push(ch); }
+        else if(/^\s$/.test(ch)){ word&&result.push(word);word='';result.push(ch); }
+        else word+=ch;
+    }
+    word&&result.push(word);return result;
+},streamShowMessage=(content,dom,isStream=true)=>new Promise(resolve=>{
+    const fmtContent=content.replace(/\s{2,}/g,' ');
+    dom.dataset.fullContent=fmtContent;dom.dataset.currentIndex=0;dom.dataset.streaming='false';
+    if(!isStream || streamSpeed === 0 || !content) completeStreamMessage(dom, fmtContent);
+    else resetStreamMessage(dom, fmtContent, 0);
+    resolve();
+});
+
+const startThinkTimer=(dom)=>{
+    let sec=0;const timeDom=dom.querySelector('.think-time');
+    const timer=setInterval(()=>{ sec++; timeDom.textContent=`思考时长：${formatSeconds(sec)}`; },1000);
+    thinkTimerMap.set(dom,timer);modelLog('AI思考计时器已启动');return timer;
+},stopThinkTimer=(dom)=>{
+    const timer=thinkTimerMap.get(dom);timer&&clearInterval(timer);thinkTimerMap.delete(dom);modelLog('AI思考计时器已停止');
+};
+
+const copyMessageContent=(msgId)=>{
+    try{const msg=conversations[currentConversationId].messages.find(t=>t.id===msgId);msg&&navigator.clipboard.writeText(msg.content);userLog('消息复制成功，ID：'+msgId);}
+    catch(e){errorLog(`复制失败：${e.message}`);}
+},toggleDeleteConfirm=(e,msgId)=>{
+    e.stopPropagation();const btn=e.target;
+    if(btn.classList.contains('confirm-delete')){deleteSingleMessage(msgId);resetAllDeleteButtons();}
+    else{resetAllDeleteButtons();btn.classList.add('confirm-delete');btn.textContent='确认删除';}
+    sensitiveLog('触发消息删除确认，ID：'+msgId);
+},deleteSingleMessage=(msgId)=>{
+    const conv=conversations[currentConversationId];if(!conv||!conv.messages)return;
+    const idx=conv.messages.findIndex(t=>t.id===msgId);
+    idx!==-1&&(conv.messages.splice(idx,1),conv.updateTime=Date.now(),saveConversations(),renderCurrentConversation());
+    sensitiveLog('消息已删除，ID：'+msgId);
+};
+
+const updateStreamButtonStatus=()=>{
+    userLog('执行流式按钮状态更新');
+    const allStreamBtns=document.querySelectorAll('.stream-btn');allStreamBtns.forEach(btn=>btn.remove());
+    const allAiMessages=document.querySelectorAll('.ai-message');
+    if(allAiMessages.length>0){
+        const lastAiMsg=allAiMessages[allAiMessages.length-1];const isStreaming=lastAiMsg.dataset.streaming === 'true';
+        const msgCtrl=lastAiMsg.querySelector('.msg-controls');const streamBtn=document.createElement('button');
+        streamBtn.className='copy-btn stream-btn';streamBtn.textContent = isStreaming ? '跳过流式输出' : '体验流式输出';
+        streamBtn.onclick=()=>{
+            if(isWaitingModelReply) return errorLog('❌ 正在请求中，暂不支持操作');
+            isStreaming ? completeStreamMessage(lastAiMsg,lastAiMsg.dataset.fullContent) : resetStreamMessage(lastAiMsg,lastAiMsg.dataset.fullContent,0);
+        };
+        msgCtrl.insertBefore(streamBtn,msgCtrl.children[1]);
+        userLog(`流式按钮文本更新：${isStreaming?'跳过流式输出':'体验流式输出'}`);
+    }
+};
+
+// ✅ 修复核心报错：pinnedConvs未定义 → 已正确声明变量并赋值
+const renderConversationsList=()=>{
+    conversationsList.innerHTML='';
+    // 正确声明pinnedConvs变量，解决未定义报错
+    const pinnedConvs=Object.values(conversations).filter(c=>c.pinned).sort((a,b)=>b.updateTime - a.updateTime);
+    const normalIds=Object.keys(conversations).filter(id=>!conversations[id].pinned).sort((a,b)=>b-a);
+    const allIds=[...pinnedConvs.map(c=>c.id),...normalIds];
+    if(allIds.length===0){
+        const emptyDom=document.createElement('div');emptyDom.className='conversation-item';emptyDom.textContent='暂无对话记录';conversationsList.appendChild(emptyDom);
+        userLog('对话列表为空，展示提示');return;
+    }
+    allIds.forEach(id=>{
+        const conv=conversations[id];const itemDom=document.createElement('div');
+        itemDom.className=`conversation-item ${id===currentConversationId?'active':''} ${conv.pinned?'pinned':''} ${id===lastActiveConvId&&!conv.pinned?'temp-pinned':''}`;
+        itemDom.dataset.id=id;
+        itemDom.addEventListener('click',(e)=>{
+            if(e.target.classList.contains('conversation-more')||e.target.closest('.conversation-actions'))return;
+            clearTempPinned();lastActiveConvId=id;currentConversationId=id;
+            renderConversationsList();renderCurrentConversation();currentModel=conv.model||currentModel;
+            saveSelectedModel(currentModel);updateConfigInfo();clearSystemMessages();
+            userLog('切换激活对话ID：'+id);
+        });
+        const infoDom=document.createElement('div');infoDom.className='conversation-info';
+        const titleInput=document.createElement('input');titleInput.className='conversation-title';titleInput.value=conv.title||getConversationTitle(conv);
+        titleInput.addEventListener('blur',()=>{
+            if(!titleInput.classList.contains('editable'))return;
+            const newTitle=getAvailableConversationName(titleInput.value.trim());
+            newTitle&&newTitle!==conv.title&&(conversations[id].title=newTitle,saveConversations(),id===currentConversationId&&updateConfigInfo());
+            titleInput.classList.remove('editable');dataLog('对话标题修改为：'+newTitle);
+        });
+        titleInput.addEventListener('keydown',(e)=>e.key==='Enter'&&(titleInput.blur(),e.stopPropagation()));
+        const timeDom=document.createElement('div');timeDom.className='conversation-time';timeDom.textContent=formatTime(conv.updateTime);
+        infoDom.appendChild(titleInput);infoDom.appendChild(timeDom);
+        const moreBtn=document.createElement('button');moreBtn.className='conversation-more';moreBtn.innerHTML='⋮';
+        const actionDom=document.createElement('div');actionDom.className='conversation-actions';
+        moreBtn.addEventListener('click',(e)=>{
+            e.stopPropagation();document.querySelectorAll('.conversation-actions').forEach(d=>d!==actionDom&&d.classList.remove('show'));
+            actionDom.classList.toggle('show');userLog('对话操作菜单'+(actionDom.classList.contains('show')?'展开':'收起'));
+        });
+        actionDom.addEventListener('click',e=>e.stopPropagation());
+        const pinBtn=document.createElement('button');pinBtn.className='conversation-action-btn pin-btn';pinBtn.textContent=conv.pinned?'取消置顶':'置顶';
+        pinBtn.addEventListener('click',(e)=>{e.stopPropagation();conversations[id].pinned=!conversations[id].pinned;saveConversations();renderConversationsList();moreBtn.click();dataLog('对话置顶状态'+(conversations[id].pinned?'开启':'关闭'));});
+        const renameBtn=document.createElement('button');renameBtn.className='conversation-action-btn rename-btn';renameBtn.textContent='重命名';
+        renameBtn.addEventListener('click',(e)=>{e.stopPropagation();titleInput.classList.add('editable');titleInput.focus();titleInput.select();moreBtn.click();userLog('开始编辑对话标题');});
+        const delBtn=document.createElement('button');delBtn.className='conversation-action-btn delete-btn';delBtn.textContent='删除对话';
+        delBtn.addEventListener('click',(e)=>{
+            e.stopPropagation();if(delBtn.classList.contains('confirm-delete')){
+                delete conversations[id];saveConversations();currentConversationId=Object.keys(conversations).length>0?Object.keys(conversations)[0]:null;
+                lastActiveConvId=currentConversationId;renderConversationsList();renderCurrentConversation();updateConfigInfo();moreBtn.click();resetAllDeleteButtons();
+                sensitiveLog('对话已删除，ID：'+id);
+            }else{resetAllDeleteButtons();delBtn.classList.add('confirm-delete');delBtn.textContent='确认删除';}
+            sensitiveLog('触发对话删除确认');
+        });
+        actionDom.appendChild(pinBtn);actionDom.appendChild(renameBtn);actionDom.appendChild(delBtn);
+        itemDom.appendChild(infoDom);itemDom.appendChild(moreBtn);itemDom.appendChild(actionDom);
+        conversationsList.appendChild(itemDom);
+    });
+    userLog('对话列表渲染完成，总计'+allIds.length+'条对话');
+},renderCurrentConversation=()=>{
+    chatContainer.innerHTML='';chatTempTip.classList.remove('show');isTempTipShowing=false;
+    if(!currentConversationId||!conversations[currentConversationId]||!conversations[currentConversationId].messages)return;
+    const messages=conversations[currentConversationId].messages;
+    messages.forEach((msg,idx)=>addMessageToUI(msg,true,false));
+    chatContainer.scrollTop = chatContainer.scrollHeight;updateStreamButtonStatus();
+    userLog('当前对话内容渲染完成，总计'+messages.length+'条消息');
+};
+
+const addMessageToUI=(msg,isHistory=false)=>{
+    const{id,role,content,sendTime,thinkDuration}=msg;const isUser=role==='user';
+    if(isUser&&(content.includes('loading-state')||!content))return;
+    const msgDom=document.createElement('div');msgDom.className=`message ${isUser?'user-message':'ai-message'}`;msgDom.dataset.msgId=id;
+    let thinkHtml=!isUser&&thinkDuration>0?`<span class="think-duration">思考时长：${formatSeconds(thinkDuration)}</span>`:'';
+    const moreHtml=`<div class="msg-more-wrapper"><button class="msg-more-btn" onclick="event.stopPropagation(); const menu = this.nextElementSibling; menu.classList.contains('show')?menu.classList.remove('show'):(resetAllDeleteButtons(),menu.classList.add('show'))">⋮</button><ul class="msg-more-menu"><li class="delete-item" data-msg-id="${id}" onclick="toggleDeleteConfirm(event, '${id}')">删除</li></ul></div>`;
+    msgDom.innerHTML=`<div class="message-avatar">${isUser?'我':'AI'}</div><div class="message-wrapper"><div class="message-content"></div><div class="msg-controls"><button class="copy-btn" onclick="copyMessageContent('${id}')">复制</button>${moreHtml}${thinkHtml}<span class="message-time">${formatTime(sendTime)}</span></div></div>`;
+    chatContainer.appendChild(msgDom);
+    !isUser?streamShowMessage(content.replace(/\s{2,}/g,' '),msgDom,!isHistory):msgDom.querySelector('.message-content').innerHTML=content.replace(/\n/g,'<br>').replace(/\s{2,}/g,' ');
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    userLog((isUser?'用户':'AI')+'消息已渲染，ID：'+id);return msgDom;
+};
+
+const contextTruncate=(prompt)=>{
+    const maxLen=CONST_CONFIG.CONTEXT_LENGTH_MAP[contextLength];if(prompt.length<=maxLen||maxLen<=0)return prompt;
+    let messages=conversations[currentConversationId].messages.slice().reverse(),tempMsgs=[],totalLen=0;const newMsg=messages[0].content;
+    totalLen+=newMsg.length;tempMsgs.push(messages[0]);
+    for(let i=1;i<messages.length;i++){
+        const msg=messages[i];const msgLen=msg.content.length;
+        if(totalLen+msgLen>maxLen){
+            if(msg.role==='assistant')for(let j=i+1;j<messages.length;j++)if(messages[j].role==='user'){tempMsgs.push(messages[j]);break;}
+            break;
+        }totalLen+=msgLen;tempMsgs.push(msg);
+    }
+    tempMsgs=tempMsgs.reverse();let newPrompt=`以下是对话历史，请基于历史回答最新问题：\n\n`;
+    tempMsgs.forEach(m=>newPrompt+=`${m.role==='user'?'用户':'AI'}：${m.content}\n`);newPrompt+=`用户：${newMsg}\nAI：`;
+    return newPrompt.length>maxLen?newPrompt.slice(-maxLen):newPrompt;
+},buildContextPrompt=(newMsg)=>{
+    const conv=currentConversationId?conversations[currentConversationId]:null;if(!conv||!conv.messages)return newMsg;
+    let prompt=`以下是对话历史，请基于历史回答最新问题：\n\n`;
+    conv.messages.forEach(m=>m.role&&(prompt+=`${m.role==='user'?'用户':'AI'}：${m.content}\n`));prompt+=`用户：${newMsg}\nAI：`;
+    modelLog('上下文提示词构建完成，长度：'+prompt.length);
+    return CONST_CONFIG.OLLAMA_SUPPORT_CONTEXT_PARAM?prompt:contextTruncate(prompt);
+};
+
+const createNewConversationWithName=(baseTitle)=>{
+    const newName=getAvailableConversationName(baseTitle);const newId=generateConversationId();
+    conversations[newId]={id:newId,title:newName,model:currentModel,createTime:Date.now(),updateTime:Date.now(),messages:[],pinned:false};
+    clearTempPinned();lastActiveConvId=newId;currentConversationId=newId;saveConversations();
+    renderConversationsList();renderCurrentConversation();updateConfigInfo();messageInput.focus();
+    dataLog(`新建对话成功，名称【${newName}】，ID：${newId}`);return newId;
+};
+
+// ✅ 核心修复：发送消息前置校验 - 自动新建对话逻辑
+const sendMessageToOllama=async(msgContent)=>{
+    // ========== 自动新建对话校验逻辑 ==========
+    const isConvListEmpty = Object.keys(conversations).length === 0;
+    const isNoSelectedConv = !currentConversationId || !conversations[currentConversationId];
+    if (isConvListEmpty || isNoSelectedConv) {
+        userLog('检测到「无对话记录」或「未选中对话」，自动创建新对话');
+        createNewConversationWithName('新对话');
+    }
+
+    if(!OLLAMA_HOST || !/^https?:\/\/.+$/.test(OLLAMA_HOST)){
+        if(!isTempTipShowing){
+            isTempTipShowing = true;
+            chatTempTip.classList.add('show');
+            setTimeout(()=>{ chatTempTip.classList.remove('show'); isTempTipShowing = false; },3000);
+        }
+        errorLog('发送失败：服务地址为空或格式无效');
+        return;
+    }
+    if(!currentModel){errorLog('发送失败：未选择模型');return;}
+    currentStreamingDom&&completeStreamMessage(currentStreamingDom,currentStreamingDom.dataset.fullContent);
+    const msg=mergeContinuousNewlines(msgContent);if(!msg)return sendButton.disabled=false;
+    isWaitingModelReply = true;sendButton.disabled=true;
+    const sendStartTime=Date.now();
+    const userMsg={id:Date.now()+Math.random().toString(36).slice(-6),role:'user',content:msg,sendTime:Date.now(),thinkDuration:0};
+    addMessageToUI(userMsg);conversations[currentConversationId].messages.push(userMsg);saveConversations();
+    const loadingDom=addMessageToUI({id:'loading-'+Date.now(),role:'assistant',content:'',sendTime:Date.now(),thinkDuration:0});
+    loadingDom.className='loading';loadingDom.innerHTML=`<div class="message-avatar">AI</div><div class="loading-content"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div><span>思考中...</span><span class="think-time">思考时长：0秒</span></div>`;
+    startThinkTimer(loadingDom);
+    try{
+        const prompt=buildContextPrompt(msg);const reqBody={model:currentModel,prompt:prompt,stream:false,temperature:0.7,max_tokens:2048};
+        CONST_CONFIG.OLLAMA_SUPPORT_CONTEXT_PARAM&&(reqBody.context_length=CONST_CONFIG.CONTEXT_LENGTH_MAP[contextLength]);
+        const controller=new AbortController();setTimeout(()=>controller.abort(),CONST_CONFIG.MSG_REPLY_TIMEOUT);
+        modelLog('开始向'+OLLAMA_HOST+'发送请求，模型：'+currentModel);
+        const res=await fetch(`${OLLAMA_HOST}/api/generate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(reqBody),signal:controller.signal});
+        const endTime=Date.now();const thinkDuration=Math.floor((endTime-sendStartTime)/1000);
+        stopThinkTimer(loadingDom);loadingDom.remove();
+        if(!res.ok)throw new Error(`请求失败：${res.status} ${res.statusText}`);
+        const resData=await res.json();const aiReply=resData.response||'';
+        const aiMsg={id:Date.now()+Math.random().toString(36).slice(-6),role:'assistant',content:aiReply,sendTime:Date.now(),thinkDuration:thinkDuration};
+        addMessageToUI(aiMsg);conversations[currentConversationId].messages.push(aiMsg);conversations[currentConversationId].updateTime=Date.now();
+        saveConversations();renderConversationsList();renderCurrentConversation();updateConfigInfo();updateStreamButtonStatus();
+        modelLog('AI响应成功，回复长度：'+aiReply.length+'字，耗时：'+thinkDuration+'秒');
+    }catch(e){stopThinkTimer(loadingDom);loadingDom.remove();errorLog(`发送失败：${e.message}`);}
+    finally{isWaitingModelReply = false;sendButton.disabled=false;messageInput.focus();}
+};
+
+const loadModelList=async()=>{
+    if(!OLLAMA_HOST)return;
+    try{
+        const controller=new AbortController();setTimeout(()=>controller.abort(),CONST_CONFIG.MODEL_LIST_TIMEOUT);
+        modelLog('加载模型列表：'+OLLAMA_HOST+'/api/tags');
+        const res=await fetch(`${OLLAMA_HOST}/api/tags`,{method:'GET',signal:controller.signal});
+        if(!res.ok)throw new Error(`接口异常：${res.status} ${res.statusText}`);
+        const resData=await res.json();const models=resData.models||[];modelSelect.innerHTML='';
+        if(models.length===0){modelSelect.innerHTML='<option value="">暂无可用模型</option>';return updateConfigInfo();}
+        models.forEach(md=>{const opt=document.createElement('option');opt.value=md.name;opt.textContent=md.name;modelSelect.appendChild(opt);});
+        if(currentModel&&!models.map(md=>md.name).includes(currentModel))currentModel=models[0].name;
+        saveSelectedModel(currentModel);modelSelect.value=currentModel;
+        !currentModel&&models.length>0&&(currentModel=models[0].name,saveSelectedModel(currentModel),modelSelect.value=currentModel);
+        updateConfigInfo();modelLog('模型列表加载成功，总计'+models.length+'个');
+    }catch(e){modelSelect.innerHTML='<option value="">加载失败</option>';updateConfigInfo();errorLog(`模型加载失败：${e.message}`);}
+};
+
+const toggleSidebar=()=>{sidebar.classList.toggle('collapsed');userLog('左侧栏'+(sidebar.classList.contains('collapsed')?'收起':'展开'));};
+sidebarToggleOuter.addEventListener('click',toggleSidebar);sidebarToggleInner.addEventListener('click',toggleSidebar);
+inputToggleBtn.addEventListener('click',toggleInputContainer);
+ollamaHostInput.addEventListener('blur', saveOllamaHost);ollamaHostInput.addEventListener('keydown',(e)=>e.key==='Enter'&&saveOllamaHost());
+modelSelect.addEventListener('change',()=>saveSelectedModel(modelSelect.value));
+streamSpeedSlider.addEventListener('input',()=>saveStreamSpeed(parseInt(streamSpeedSlider.value)));
+contextLengthSlider.addEventListener('input',()=>saveContextLength(parseInt(contextLengthSlider.value)));
+streamAutoScrollSwitch.addEventListener('change',()=>saveStreamAutoScroll(streamAutoScrollSwitch.checked));
+messageInput.addEventListener('input',()=>{messageInput.value.trim()===''?messageInput.style.height='56px':(messageInput.style.height='auto',messageInput.style.height=Math.min(messageInput.scrollHeight,200)+'px');});
+messageInput.addEventListener('keydown',(e)=>{
+    if((e.key==='Enter'&&!e.shiftKey)||(e.ctrlKey&&e.key==='Enter')){
+        e.preventDefault();const msg=messageInput.value.trim();if(msg){messageInput.value='';messageInput.style.height='56px';sendMessageToOllama(msg);}
+    }else if(e.key==='Enter'&&e.shiftKey)setTimeout(()=>{messageInput.style.height='auto';messageInput.style.height=Math.min(messageInput.scrollHeight,200)+'px';},0);
+});
+sendButton.addEventListener('click',()=>{const msg=messageInput.value.trim();if(msg){messageInput.value='';messageInput.style.height='56px';sendMessageToOllama(msg);}});
+newChatBtn.addEventListener('click',(e)=>{e.stopPropagation();createNewConversationWithName('新对话');});
+
+storageCollapseHeader.addEventListener('click', () => {
+    storageCollapseHeader.classList.toggle('expanded');storageCollapseBody.classList.toggle('expanded');
+    userLog(`存储管理折叠栏${storageCollapseBody.classList.contains('expanded')?'展开':'收起'}`);
+});
+clearConfigBtn.addEventListener('click', () => {
+    const configKeys = [STORAGE_KEYS.selectedModel, STORAGE_KEYS.ollamaHost, STORAGE_KEYS.streamSpeed, STORAGE_KEYS.contextLength, STORAGE_KEYS.streamAutoScroll];
+    configKeys.forEach(key => localStorage.removeItem(key));
+    dataLog('已清除配置存储数据');loadFromStorage();showSystemMessage('✅ 配置已清除，恢复默认值');
+});
+clearAllBtn.addEventListener('click', () => {
+    Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+    dataLog('已清除所有存储数据');conversations={};currentConversationId='';
+    loadFromStorage();renderConversationsList();renderCurrentConversation();
+    showSystemMessage('✅ 所有数据已清除，初始化新会话');
+});
+
+function mergeContinuousNewlines(str) { return str.replace(/\n+/g, '\n').trim(); }
+
+window.addEventListener('load',async()=>{
+    userLog('页面加载完成，开始初始化');
+    loadFromStorage();renderConversationsList();renderCurrentConversation();updateConfigInfo();
+    await loadModelList();messageInput.focus();
+});</script></body></html>
