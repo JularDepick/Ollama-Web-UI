@@ -18,11 +18,14 @@
 ---
 
 ## 相关教程
-### 一、部署到Windows的热点局域网
+### 部署到Windows的热点局域网
 1. 下载Web服务器软件如PHPTS或使用Windows系统原生的IIS服务，自行配置网站人口到本地已下载的Ollama-Web-UI的Release解压后的目录
 2. 在已连接Windows本机热点的其他设备上尝试通过 Windows局域网IP地址:Web服务器监听端口 访问Ollama-Web-UI页面
 <img width="" height="500px" alt="image" src="https://github.com/user-attachments/assets/9f018f85-5aec-498c-801c-25cf01e2b1c0" />
-
+3. 正常使用
 ---
 
 ## 相关问题及解决方案
+### 如何自定义Ollama服务地址
+  - 创建环境变量 OLLAMA_HOST=你自定义的地址(带端口号) 后重启Ollama服务或客户端
+  - 如果需要允许外部直接访问Ollama服务地址，还需要创建环境变量 OLLAMA_ORIGINS=*
