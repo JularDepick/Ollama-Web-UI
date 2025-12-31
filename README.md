@@ -13,7 +13,7 @@
 5. 点击页面右上角的配置选项，配置正确的Ollama服务地址，回车加载
 <img width="50%" height="auto" alt="image" src="https://github.com/user-attachments/assets/3384a199-a3a5-4b9b-80ba-ef612e2f6a7c" />
 
-6. 开始使用
+6. 选择合适的模型和配置参数，开始使用
 
 ---
 
