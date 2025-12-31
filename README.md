@@ -11,8 +11,18 @@
 3. 启动Ollama客户端，登录账号，测试模型可用性
 4. 下载本仓库Release包，解压到合适目录后，使用浏览器打开 index.html 文件
 5. 点击页面右上角的配置选项，配置正确的Ollama服务地址，回车加载
-<img width="2559" height="1376" alt="image" src="https://github.com/user-attachments/assets/3384a199-a3a5-4b9b-80ba-ef612e2f6a7c" />
+<img width="50%" height="auto" alt="image" src="https://github.com/user-attachments/assets/3384a199-a3a5-4b9b-80ba-ef612e2f6a7c" />
 
 6. 开始使用
+
+---
+
+## 相关教程
+### 一、部署到Windows的热点局域网
+1. 下载Web服务器软件如PHPTS或使用Windows系统原生的IIS服务，自行配置网站人口到本地已下载的Ollama-Web-UI的Release解压后的目录
+2. 在已连接Windows本机热点的其他设备上尝试通过 Windows局域网IP地址:Web服务器监听端口 访问Ollama-Web-UI页面
+![1f033f3dd2294f53e63236e3b6c65ae0](https://github.com/user-attachments/assets/9f018f85-5aec-498c-801c-25cf01e2b1c0)
+
+---
 
 ## 相关问题及解决方案
