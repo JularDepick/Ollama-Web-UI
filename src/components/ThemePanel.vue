@@ -55,7 +55,7 @@ function applyColor() {
 .theme-selector {
   position: fixed;
   top: 60px;
-  right: 120px;
+  right: 88px;
   z-index: 1001;
   background: var(--bg-white);
   border-radius: var(--radius-sm);
