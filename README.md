@@ -1,5 +1,5 @@
 # Ollama-Web-UI
-由豆包AI、Trae提供代码生成，我提供修正提示词，为本地Ollama客户端适配的网页版交互UI。依赖Ollama客户端的局域网端口API，实现与Ollama部署的本地模型或Ollama云模型进行带上下文的交互。
+由豆包AI、Trae、Claude提供代码生成，我提供修正提示词，为本地Ollama客户端适配的网页版交互UI。依赖Ollama客户端的局域网端口API，实现与Ollama部署的本地模型或Ollama云模型进行带上下文的交互。
 
 ---
 
@@ -9,7 +9,23 @@
 
 2. 注册Ollama官网个人账号
 3. 启动Ollama客户端，登录账号，测试模型可用性
-4. 下载本仓库Release包，解压到合适目录后，使用浏览器打开 index.html 文件
+4. 下载本仓库Release包，解压到合适目录后：
+
+   **方式一（开发运行）**：
+   ```bash
+   npm install
+   npm run dev
+   ```
+   然后在浏览器打开 http://localhost:5173
+
+   **方式二（部署运行）**：
+   ```bash
+   npm install
+   npm run build
+   ```
+   将 `dist/` 目录部署到任意静态服务器（PHPTS、IIS、Nginx 等），
+   或用 VS Code Live Server 直接打开 `dist/index.html` 的上级目录。
+
 5. 点击页面右上角的配置选项，配置正确的Ollama服务地址，回车加载
 <img width="50%" height="auto" alt="image" src="https://github.com/user-attachments/assets/3384a199-a3a5-4b9b-80ba-ef612e2f6a7c" />
 
