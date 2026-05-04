@@ -1,7 +1,6 @@
 <template>
   <div class="chat-header">
-    <button v-if="!store.sidebarCollapsed" class="sidebar-toggle" id="sidebar-toggle-inner" @click="store.sidebarCollapsed = true">☰</button>
-    <button v-else class="sidebar-toggle" id="sidebar-toggle-inner" @click="store.sidebarCollapsed = false">☰</button>
+    <button class="sidebar-toggle" id="sidebar-toggle-outer" @click="store.sidebarCollapsed = !store.sidebarCollapsed">☰</button>
     Ollama-Web-UI
     <button class="config-selector-toggle" @click="store.configPanelOpen = !store.configPanelOpen">配置选项</button>
     <ConfigPanel />

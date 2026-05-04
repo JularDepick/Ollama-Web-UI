@@ -1,7 +1,7 @@
 <template>
   <div class="sidebar" :class="{ collapsed: store.sidebarCollapsed }">
     <div class="sidebar-header">
-      <button class="sidebar-toggle" @click="store.sidebarCollapsed = true">☰</button>
+      <button class="sidebar-toggle" id="sidebar-toggle-inner" @click="store.sidebarCollapsed = true">☰</button>
       <div class="sidebar-title">对话记录</div>
       <div class="sidebar-controls">
         <button class="sidebar-btn new-btn" title="新建对话" @click="store.createNewConversation()">+</button>
@@ -43,7 +43,6 @@
       </div>
     </div>
   </div>
-  <button v-if="store.sidebarCollapsed" class="sidebar-toggle" id="sidebar-toggle-outer" @click="store.sidebarCollapsed = false">☰</button>
 </template>
 
 <script setup>
