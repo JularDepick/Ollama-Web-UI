@@ -48,6 +48,7 @@ function handleKeydown(e) {
   // Esc: close panels
   if (e.key === 'Escape') {
     store.configPanelOpen = false
+    store.themePanelOpen = false
     store.sidebarCollapsed = true
   }
 }
@@ -74,6 +75,12 @@ function handleDocClick(e) {
   if (store.configPanelOpen) {
     const selector = e.target.closest('.config-selector, .config-selector-toggle')
     if (!selector) store.configPanelOpen = false
+  }
+
+  // Close theme panel when clicking outside
+  if (store.themePanelOpen) {
+    const selector = e.target.closest('.theme-selector, .config-selector-toggle')
+    if (!selector) store.themePanelOpen = false
   }
 
   // Close sidebar when clicking on main content

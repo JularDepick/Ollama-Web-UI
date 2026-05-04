@@ -59,3 +59,145 @@ export const DEFAULT_CONFIG = {
   streamAutoScroll: 0,
   contextLength: 1
 }
+
+// ============================================================
+// Theme System
+// ============================================================
+
+export const THEMES = {
+  default: {
+    name: '默认蓝', emoji: '🔵',
+    vars: {
+      '--primary-color': '#1677ff',
+      '--primary-hover': '#0f62d9',
+      '--primary-light': '#e8f3ff',
+      '--primary-alt': '#1890ff',
+      '--bg-white': '#fff',
+      '--bg-gray': '#f5f7fa',
+      '--bg-gray-light': '#f0f2f5',
+      '--text-main': '#333',
+      '--text-secondary': '#666',
+      '--text-light': '#999',
+      '--border-color': '#e5e7eb'
+    }
+  },
+  green: {
+    name: '翠绿', emoji: '🟢',
+    vars: {
+      '--primary-color': '#52c41a',
+      '--primary-hover': '#389e0d',
+      '--primary-light': '#f6ffed',
+      '--primary-alt': '#73d13d',
+      '--bg-white': '#fff',
+      '--bg-gray': '#f5f7fa',
+      '--bg-gray-light': '#f0f2f5',
+      '--text-main': '#333',
+      '--text-secondary': '#666',
+      '--text-light': '#999',
+      '--border-color': '#e5e7eb'
+    }
+  },
+  purple: {
+    name: '紫色', emoji: '🟣',
+    vars: {
+      '--primary-color': '#722ed1',
+      '--primary-hover': '#531dab',
+      '--primary-light': '#f9f0ff',
+      '--primary-alt': '#9254de',
+      '--bg-white': '#fff',
+      '--bg-gray': '#f5f7fa',
+      '--bg-gray-light': '#f0f2f5',
+      '--text-main': '#333',
+      '--text-secondary': '#666',
+      '--text-light': '#999',
+      '--border-color': '#e5e7eb'
+    }
+  },
+  orange: {
+    name: '暖橙', emoji: '🟠',
+    vars: {
+      '--primary-color': '#fa8c16',
+      '--primary-hover': '#d46b08',
+      '--primary-light': '#fff7e6',
+      '--primary-alt': '#ffa940',
+      '--bg-white': '#fff',
+      '--bg-gray': '#f5f7fa',
+      '--bg-gray-light': '#f0f2f5',
+      '--text-main': '#333',
+      '--text-secondary': '#666',
+      '--text-light': '#999',
+      '--border-color': '#e5e7eb'
+    }
+  },
+  red: {
+    name: '绯红', emoji: '🔴',
+    vars: {
+      '--primary-color': '#f5222d',
+      '--primary-hover': '#cf1322',
+      '--primary-light': '#fff1f0',
+      '--primary-alt': '#ff4d4f',
+      '--bg-white': '#fff',
+      '--bg-gray': '#f5f7fa',
+      '--bg-gray-light': '#f0f2f5',
+      '--text-main': '#333',
+      '--text-secondary': '#666',
+      '--text-light': '#999',
+      '--border-color': '#e5e7eb'
+    }
+  },
+  dark: {
+    name: '暗色', emoji: '🌙',
+    vars: {
+      '--primary-color': '#1677ff',
+      '--primary-hover': '#0f62d9',
+      '--primary-light': '#1a2744',
+      '--primary-alt': '#4d9aff',
+      '--bg-white': '#1e1e1e',
+      '--bg-gray': '#141414',
+      '--bg-gray-light': '#1a1a1a',
+      '--text-main': '#e5e5e5',
+      '--text-secondary': '#a0a0a0',
+      '--text-light': '#707070',
+      '--border-color': '#333'
+    }
+  }
+}
+
+export const THEME_STORAGE_KEY = 'Ollama-Web-UI-Theme'
+export const THEME_CUSTOM_COLOR_KEY = 'Ollama-Web-UI-CustomColor'
+
+// Color manipulation utilities
+function hexToRgb(hex) {
+  const c = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  return c ? { r: parseInt(c[1],16), g: parseInt(c[2],16), b: parseInt(c[3],16) } : null
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(x => Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join('')
+}
+
+export function darken(hex, amt) {
+  const c = hexToRgb(hex); if (!c) return hex
+  return rgbToHex(c.r*(1-amt), c.g*(1-amt), c.b*(1-amt))
+}
+
+export function lighten(hex, amt) {
+  const c = hexToRgb(hex); if (!c) return hex
+  return rgbToHex(c.r+(255-c.r)*amt, c.g+(255-c.g)*amt, c.b+(255-c.b)*amt)
+}
+
+export function applyThemeVars(vars) {
+  Object.entries(vars).forEach(([key, val]) => {
+    document.documentElement.style.setProperty(key, val)
+  })
+}
+
+export function applyCustomTheme(primary) {
+  const vars = {
+    '--primary-color': primary,
+    '--primary-hover': darken(primary, 0.12),
+    '--primary-light': lighten(primary, 0.6),
+    '--primary-alt': lighten(primary, 0.15)
+  }
+  applyThemeVars(vars)
+}

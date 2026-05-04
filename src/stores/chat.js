@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import {
   CONST_CONFIG, STORAGE_KEYS, DEFAULT_CONFIG,
+  THEMES, THEME_STORAGE_KEY, THEME_CUSTOM_COLOR_KEY,
+  applyThemeVars, applyCustomTheme,
   userLog, modelLog, dataLog, sensitiveLog, errorLog
 } from '@/constants'
 import { loadJSON, saveJSON, loadConfig, saveConfig, loadConversations, saveConversations, loadLastActiveChat, saveLastActiveChat } from '@/utils/storage'
@@ -34,6 +36,29 @@ export const useChatStore = defineStore('chat', () => {
 
   // ============ Streaming State ============
   const currentStreamingMsgId = ref(null)
+
+  // ============ Theme ============
+  const themePanelOpen = ref(false)
+  const currentTheme = ref(loadConfig(THEME_STORAGE_KEY, 'default'))
+  const customColor = ref(loadConfig(THEME_CUSTOM_COLOR_KEY, ''))
+
+  function selectTheme(id) {
+    currentTheme.value = id
+    customColor.value = ''
+    saveConfig(THEME_STORAGE_KEY, id)
+    localStorage.removeItem(THEME_CUSTOM_COLOR_KEY)
+    if (id === 'custom') return
+    const theme = THEMES[id]
+    if (theme) applyThemeVars(theme.vars)
+  }
+
+  function setCustomColor(color) {
+    customColor.value = color
+    currentTheme.value = 'custom'
+    saveConfig(THEME_CUSTOM_COLOR_KEY, color)
+    saveConfig(THEME_STORAGE_KEY, 'custom')
+    applyCustomTheme(color)
+  }
 
   // ============ Getters ============
   const currentConversation = computed(() => {
@@ -387,6 +412,13 @@ export const useChatStore = defineStore('chat', () => {
 
   // ============ Initialization ============
   function initialize() {
+    // Apply saved theme
+    if (customColor.value && currentTheme.value === 'custom') {
+      applyCustomTheme(customColor.value)
+    } else if (THEMES[currentTheme.value]) {
+      applyThemeVars(THEMES[currentTheme.value].vars)
+    }
+
     // Ensure conversations structure is valid
     const convs = conversations.value
     let needsSave = false
@@ -429,6 +461,7 @@ export const useChatStore = defineStore('chat', () => {
     isWaitingModelReply, isTempTipShowing,
     toastMessage, toastType, toastVisible,
     currentStreamingMsgId,
+    themePanelOpen, currentTheme, customColor,
     // Getters
     currentConversation, currentMessages,
     sortedConversationIds, filteredConversationIds, hasConversations,
@@ -439,6 +472,7 @@ export const useChatStore = defineStore('chat', () => {
     setOllamaHost, setSelectedModel, setStreamSpeed, setContextLength, setStreamAutoScroll,
     loadModelList, clearConfigData, clearAllData,
     addMessage, deleteMessage, sendMessage,
-    persistConversations, initialize
+    persistConversations, initialize,
+    selectTheme, setCustomColor
   }
 })

@@ -1,6 +1,6 @@
 <template>
   <div class="input-container" :class="{ collapsed: store.inputCollapsed }">
-    <button id="input-toggle-btn" class="inner-btn" @click="toggleInput">
+    <button id="input-toggle-btn" :class="store.inputCollapsed ? 'fixed-btn' : 'inner-btn'" @click="toggleInput">
       {{ store.inputCollapsed ? '展开输入框' : '收起输入框' }}
     </button>
     <div class="input-wrapper">
