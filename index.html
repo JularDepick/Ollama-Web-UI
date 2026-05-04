@@ -1,60 +1,13 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"><title>Ollama-Web-UI</title>
-<link rel="stylesheet" href="lib/css/main.css"></head>
-<body><div class="sidebar collapsed"><div class="sidebar-header"><button id="sidebar-toggle-inner" class="sidebar-toggle">☰</button><div class="sidebar-title">对话记录</div><div class="sidebar-controls"><button class="sidebar-btn new-btn" title="新建对话">+</button></div></div><div class="conversations-list" id="conversations-list"></div></div>
-<div class="main-content"><div class="chat-header"><button id="sidebar-toggle-outer" class="sidebar-toggle">☰</button>Ollama-Web-UI<button class="config-selector-toggle">配置选项</button><div class="config-selector" id="config-selector"><div class="config-selector-inner">
-    <div class="config-item">
-        <div class="config-item-row">
-            <label class="config-label">服务地址</label>
-            <input type="text" id="ollama-host-input" class="config-input" placeholder="示例: http://192.168.1.1:114514" spellcheck="false">
-        </div>
-        <div id="host-error-tip">服务地址校验失败</div>
-    </div>
-    
-    <div class="config-item">
-        <div class="config-item-row">
-            <label class="config-label">切换模型</label>
-            <select id="model-select" class="config-input"></select>
-        </div>
-    </div>
-
-    <div class="config-item">
-        <div class="config-item-row">
-            <label class="config-label">流式速度</label>
-            <input type="range" id="stream-speed-slider" class="stream-speed-slider" min="0" max="4" step="1" value="1">
-            <span class="stream-speed-text" id="stream-speed-text">16字/秒</span>
-        </div>
-    </div>
-
-    <div class="config-item">
-        <div class="config-item-row">
-            <label class="config-label">定位流式输出</label>
-            <input type="checkbox" id="stream-auto-scroll" class="switch-control" checked=false>
-            <span class="switch-text" id="stream-auto-scroll-text">已关闭</span>
-        </div>
-    </div>
-
-    <div class="config-item">
-        <div class="config-item-row">
-            <label class="config-label">上下文长度</label>
-            <input type="range" id="context-length-slider" class="context-length-slider" min="0" max="6" step="1" value="1">
-            <span class="context-length-text" id="context-length-text">8k</span>
-        </div>
-    </div>
-
-    <div class="storage-collapse">
-        <div class="storage-collapse-header" id="storage-collapse-header">本地储存管理</div>
-        <div class="storage-collapse-body" id="storage-collapse-body">
-            <div class="storage-btn-group">
-                <button class="config-btn" id="clear-config-btn">清除配置选项储存数据</button>
-                <button class="config-btn danger" id="clear-all-btn">清除所有相关储存数据</button>
-            </div>
-        </div>
-    </div>
-</div></div></div>
-<div class="current-config" id="current-config">未选择模型 | 新对话</div>
-<div id="chat-temp-tip" class="chat-temp-tip">服务地址为空或无效，无法发送消息！</div>
-<div class="chat-container" id="chat-container"></div>
-<div class="input-container" id="input-container"><button id="input-toggle-btn" class="inner-btn">收起输入框</button><div class="input-wrapper"><textarea id="message-input" placeholder="输入消息(Enter发送，Shift+Enter换行)..." spellcheck="false"></textarea><button id="send-button">➤</button></div></div></div>
-<script src="lib/js/showdown.min.js"></script>
-<script src="lib/js/katex.min.js"></script>
-<script src="include/main.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src *; font-src 'self' data:;">
+  <title>Ollama-Web-UI</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
