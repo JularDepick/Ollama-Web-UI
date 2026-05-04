@@ -1,13 +1,13 @@
 <template>
   <div class="chat-container" id="chat-container" ref="containerRef">
-    <template v-if="store.currentMessages.length === 0 && !store.isWaitingModelReply">
+    <template v-if="visibleMessages.length === 0 && !store.isWaitingModelReply">
       <div class="empty-state">
         <div class="empty-state-icon">💬</div>
         <div class="empty-state-title">开始新的对话</div>
         <div class="empty-state-hint">在下方的输入框中输入消息开始聊天<br>Enter 发送，Shift+Enter 换行</div>
       </div>
     </template>
-    <template v-for="(msg, idx) in store.currentMessages" :key="msg.id">
+    <template v-for="(msg, idx) in visibleMessages" :key="msg.id">
       <div v-if="shouldShowTimeSeparator(msg, idx)" class="time-separator">
         <span>{{ formatTime(msg.sendTime) }}</span>
       </div>
@@ -37,8 +37,20 @@ const containerRef = ref(null)
 const thinkSeconds = ref(0)
 let thinkTimer = null
 
+// Filter out pending empty AI message while loading
+const visibleMessages = computed(() => {
+  const msgs = store.currentMessages
+  if (store.isWaitingModelReply && msgs.length > 0) {
+    const last = msgs[msgs.length - 1]
+    if (last.role === 'assistant' && !last.content) {
+      return msgs.slice(0, -1)
+    }
+  }
+  return msgs
+})
+
 // Auto scroll on new messages
-watch(() => store.currentMessages.length, async () => {
+watch(() => visibleMessages.value.length, async () => {
   await nextTick()
   scrollToBottom()
 })
@@ -61,14 +73,14 @@ function scrollToBottom() {
 
 function shouldShowTimeSeparator(msg, idx) {
   if (idx === 0) return true
-  const prev = store.currentMessages[idx - 1]
+  const prev = visibleMessages[idx - 1]
   if (!prev || !prev.sendTime || !msg.sendTime) return false
   return msg.sendTime - prev.sendTime > 300000 // 5 min
 }
 
 function isConsecutive(msg, idx) {
   if (idx === 0) return false
-  const prev = store.currentMessages[idx - 1]
+  const prev = visibleMessages[idx - 1]
   if (!prev) return false
   return prev.role === msg.role && (msg.sendTime - prev.sendTime) < 300000
 }

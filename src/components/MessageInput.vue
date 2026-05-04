@@ -1,5 +1,5 @@
 <template>
-  <div class="input-container" ref="inputContainerRef">
+  <div class="input-container" :class="{ collapsed: store.inputCollapsed }">
     <button id="input-toggle-btn" class="inner-btn" @click="toggleInput">
       {{ store.inputCollapsed ? '展开输入框' : '收起输入框' }}
     </button>
@@ -25,7 +25,6 @@ import { useChatStore } from '@/stores/chat'
 const store = useChatStore()
 const inputText = ref('')
 const textareaRef = ref(null)
-const inputContainerRef = ref(null)
 
 const canSend = computed(() => {
   return !store.isWaitingModelReply && inputText.value.trim().length > 0 && !!store.ollamaHost
