@@ -1,5 +1,8 @@
 import { STORAGE_KEYS } from '@/constants'
 
+// ---------- Write Cache (skip-unchanged) ----------
+const _writeCache = {}
+
 // ---------- Generic Storage Helpers ----------
 export function loadJSON(key, fallback = null) {
   try {
@@ -13,10 +16,15 @@ export function loadJSON(key, fallback = null) {
 export function saveJSON(key, value) {
   try {
     const serialized = JSON.stringify(value)
+    if (_writeCache[key] === serialized) return true
     localStorage.setItem(key, serialized)
+    _writeCache[key] = serialized
     return true
   } catch (e) {
-    console.error('保存失败:', e.message)
+    const msg = e.name === 'QuotaExceededError' || e.code === 22
+      ? '存储空间已满，请清理旧数据或导出备份'
+      : '保存失败: ' + e.message
+    console.error(msg)
     return false
   }
 }
@@ -40,7 +48,7 @@ export function loadLastActiveChat() {
 }
 
 export function saveLastActiveChat(id) {
-  try { localStorage.setItem(STORAGE_KEYS.lastActiveChat, id) } catch {}
+  saveJSON(STORAGE_KEYS.lastActiveChat, id)
 }
 
 // ---------- Config ----------

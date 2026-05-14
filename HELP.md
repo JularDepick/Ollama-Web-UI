@@ -280,8 +280,8 @@ Ollama-Web-UI/
 ├── Claude_Logs.md              # 操作日志
 ├── HELP.md                     # 本文件
 ├── LICENSE                     # 许可证
-├── README.md                   # 项目说明
-└── Update_Plans.md             # 优化计划
+├── HELP.md                     # 本文件
+└── README.md                   # 项目说明
 ```
 
 ### npm 脚本

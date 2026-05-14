@@ -12,8 +12,10 @@ export function formatSeconds(sec) {
 }
 
 // ---------- ID Generation ----------
+let _idCounter = 0
 export function genId() {
-  return Date.now() + Math.random().toString(36).slice(-6)
+  if (crypto.randomUUID) return crypto.randomUUID().slice(0, 8)
+  return Date.now().toString(36) + (++_idCounter).toString(36) + Math.random().toString(36).slice(-4)
 }
 
 // ---------- Think Time Timer ----------

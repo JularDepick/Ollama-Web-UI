@@ -9,9 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "katex": "^0.16.9",
     "pinia": "^2.1.7",
-    "showdown": "^2.1.0",
+    "vite-plugin-pwa": "^1.2.0",
     "vue": "^3.4.21"
   },
   "devDependencies": {
