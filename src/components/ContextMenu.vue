@@ -107,7 +107,7 @@ function executeItem(item) {
 }
 
 .context-menu-item.danger:hover {
-  background: #fff1f0;
+  background: rgba(245, 34, 45, 0.1);
   color: var(--text-danger);
 }
 

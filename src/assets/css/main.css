@@ -38,6 +38,7 @@
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
   --transition-fast: 200ms ease-out;
   --transition-normal: 300ms ease-out;
+  --msg-font-size: 15px;
 }
 
 /* ---------- Reset & Base ---------- */
@@ -75,6 +76,7 @@ input, textarea, select {
   user-select: text;
   overflow-wrap: break-word;
   word-wrap: break-word;
+  font-size: var(--msg-font-size);
 }
 
 /* ---------- Scrollbar ---------- */
@@ -352,6 +354,24 @@ input, textarea, select {
   font-size: 12px;
   color: var(--text-light);
   margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.conversation-count {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.conversation-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
 .conversation-more {
@@ -462,6 +482,63 @@ input, textarea, select {
   justify-content: center;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* ---------- Connection Status ---------- */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: default;
+  transition: background 0.2s;
+}
+
+.connection-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-light);
+  transition: background 0.3s;
+}
+
+.connection-status.connected .status-dot {
+  background: #52c41a;
+  box-shadow: 0 0 4px rgba(82, 196, 26, 0.5);
+}
+
+.connection-status.disconnected .status-dot {
+  background: #ff4d4f;
+  box-shadow: 0 0 4px rgba(255, 77, 79, 0.5);
+}
+
+.connection-status.checking .status-dot {
+  background: #faad14;
+  animation: pulse 1s infinite;
+}
+
+.connection-status.unknown .status-dot {
+  background: var(--text-light);
+}
+
+.connection-status .status-text {
+  font-weight: 500;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* ---------- Current Config ---------- */
 .current-config {
   padding: 8px 16px;
@@ -471,6 +548,41 @@ input, textarea, select {
   text-align: center;
   border-bottom: 1px solid var(--border-color);
   transition: opacity var(--transition-fast);
+}
+
+.config-stats {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+/* ---------- Save Indicator ---------- */
+.save-indicator {
+  margin-left: 12px;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.save-indicator.saving {
+  opacity: 0.7;
+  color: var(--primary-color);
+}
+
+.save-indicator.saved {
+  opacity: 0.5;
+  color: #52c41a;
+  animation: fadeOutSave 2s forwards;
+}
+
+.save-indicator.error {
+  opacity: 1;
+  color: var(--text-danger);
+}
+
+@keyframes fadeOutSave {
+  0% { opacity: 0.5; }
+  70% { opacity: 0.5; }
+  100% { opacity: 0; }
 }
 
 /* ---------- Config / Theme Selector Toggles ---------- */
@@ -674,7 +786,7 @@ input, textarea, select {
   margin-top: 1px;
   padding-left: 12px;
   font-size: 12px;
-  color: #e53e3e;
+  color: var(--text-danger);
   line-height: 1.2;
   display: none;
 }
@@ -688,7 +800,7 @@ input, textarea, select {
   text-align: center;
   font-size: 13px;
   color: #fff;
-  background: #e53e3e;
+  background: var(--text-danger);
   padding: 4px 0;
   line-height: 1.5;
   width: 100%;
@@ -705,7 +817,7 @@ input, textarea, select {
 .chat-temp-tip {
   text-align: center;
   font-size: 14px;
-  color: #e53e3e;
+  color: var(--text-danger);
   padding: 0;
   margin: 0 auto;
   line-height: 1.5;
@@ -1154,8 +1266,8 @@ input, textarea, select {
   position: fixed;
   left: 0;
   bottom: 0;
-  width: 75px !important;
-  height: 22px !important;
+  width: 75px;
+  height: 22px;
   border: none;
   border-radius: 0 6px 6px 0;
   background: var(--primary-color);
@@ -1222,8 +1334,29 @@ input, textarea, select {
 }
 
 #send-button:disabled {
-  background: #e5e7eb;
+  background: var(--border-color);
   cursor: not-allowed;
+}
+
+#stop-button {
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--text-danger);
+  border-radius: 50%;
+  background: var(--bg-white);
+  color: var(--text-danger);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+#stop-button:hover {
+  background: var(--text-danger);
+  color: #fff;
 }
 
 .input-hint {
@@ -1325,6 +1458,34 @@ input, textarea, select {
   box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.3);
 }
 
+.scroll-up-btn {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  z-index: 999;
+  transition: all 0.2s;
+}
+
+.scroll-up-btn:hover {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.3);
+}
+
 /* ========================================
    Markdown Content Styles
    ======================================== */
@@ -1378,7 +1539,7 @@ input, textarea, select {
 }
 
 .message-content pre code {
-  display: block;
+  display: flex;
   padding: 16px;
   font-family: 'JetBrains Mono', 'Fira Code', 'Microsoft YaHei', monospace;
   color: var(--code-text);
@@ -1386,6 +1547,37 @@ input, textarea, select {
   font-size: inherit;
   white-space: pre;
   word-break: normal;
+  line-height: 1.5;
+}
+
+.code-lines {
+  display: flex;
+  flex-direction: column;
+  padding-right: 12px;
+  margin-right: 12px;
+  border-right: 1px solid var(--border-color);
+  color: var(--text-light);
+  user-select: none;
+  text-align: right;
+  min-width: 24px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.line-num {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.code-content {
+  flex: 1;
+  overflow-x: auto;
+}
+
+/* Hide line numbers when collapsed */
+pre[data-collapsed] .code-lines {
+  display: none;
 }
 
 .message-content pre[data-collapsed] {
@@ -1431,11 +1623,19 @@ input, textarea, select {
 .message-content :not(pre) > code {
   padding: 2px 6px;
   background: var(--bg-gray-light);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  font-size: 0.9em;
+  font-size: 0.85em;
   color: var(--text-danger);
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   word-break: break-word;
+  white-space: nowrap;
+}
+
+.user-message .message-content :not(pre) > code {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 /* ---------- Tables ---------- */
@@ -1446,43 +1646,78 @@ input, textarea, select {
   font-size: 14px;
   overflow-x: auto;
   display: block;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
 }
 
 .message-content th,
 .message-content td {
   border: 1px solid var(--border-color);
-  padding: 8px 12px;
+  padding: 10px 14px;
   text-align: left;
 }
 
 .message-content th {
   background: var(--bg-gray);
   font-weight: 600;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.message-content tr:hover {
+  background: var(--primary-light);
 }
 
 .message-content tr:nth-child(even) {
   background: var(--bg-gray-light);
 }
 
+.message-content tr:nth-child(even):hover {
+  background: var(--primary-light);
+}
+
 /* ---------- Blockquotes ---------- */
 .message-content blockquote {
   border-left: 4px solid var(--primary-color);
-  background: var(--bg-gray);
-  padding: 8px 16px;
+  background: var(--primary-light);
+  padding: 12px 16px;
   margin: 12px 0;
   border-radius: 0 6px 6px 0;
-  color: var(--text-secondary);
+  color: var(--text-main);
+  font-style: italic;
+  position: relative;
+}
+
+.message-content blockquote::before {
+  content: '"';
+  position: absolute;
+  top: -8px;
+  left: 8px;
+  font-size: 32px;
+  color: var(--primary-color);
+  opacity: 0.3;
+  font-family: Georgia, serif;
 }
 
 .message-content blockquote p {
   margin: 4px 0;
 }
 
+.user-message .message-content blockquote {
+  background: rgba(255, 255, 255, 0.1);
+  border-left-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+.user-message .message-content blockquote::before {
+  color: rgba(255, 255, 255, 0.3);
+}
+
 /* ---------- Horizontal Rules ---------- */
 .message-content hr {
   border: none;
-  border-top: 1px solid #e5e7eb;
-  margin: 16px 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--border-color), transparent);
+  margin: 20px 0;
 }
 
 /* ---------- Headings ---------- */
@@ -1490,24 +1725,48 @@ input, textarea, select {
 .message-content h2,
 .message-content h3,
 .message-content h4 {
-  margin: 16px 0 8px;
+  margin: 20px 0 10px;
   line-height: 1.4;
+  color: var(--text-main);
 }
 
 .message-content h1 {
-  font-size: 1.4em;
-  border-bottom: 1px solid var(--border-light);
-  padding-bottom: 6px;
+  font-size: 1.5em;
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 8px;
+  margin-top: 24px;
 }
 
 .message-content h2 {
-  font-size: 1.25em;
-  border-bottom: 1px solid var(--border-light);
-  padding-bottom: 4px;
+  font-size: 1.3em;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+  margin-top: 20px;
 }
 
 .message-content h3 {
-  font-size: 1.1em;
+  font-size: 1.15em;
+  margin-top: 16px;
+}
+
+.message-content h4 {
+  font-size: 1.05em;
+  margin-top: 14px;
+}
+
+.user-message .message-content h1,
+.user-message .message-content h2,
+.user-message .message-content h3,
+.user-message .message-content h4 {
+  color: #fff;
+}
+
+.user-message .message-content h1 {
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+.user-message .message-content h2 {
+  border-bottom-color: rgba(255, 255, 255, 0.2);
 }
 
 /* ---------- Paragraphs & Lists ---------- */
@@ -1518,31 +1777,59 @@ input, textarea, select {
 .message-content ul,
 .message-content ol {
   padding-left: 24px;
-  margin: 8px 0;
+  margin: 10px 0;
 }
 
 .message-content li {
-  margin: 4px 0;
+  margin: 6px 0;
+  line-height: 1.6;
+}
+
+.message-content li::marker {
+  color: var(--primary-color);
+}
+
+.message-content ul ul,
+.message-content ol ol,
+.message-content ul ol,
+.message-content ol ul {
+  margin: 2px 0;
 }
 
 /* ---------- Links ---------- */
 .message-content a {
   color: var(--primary-color);
   text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
 }
 
 .message-content a:hover {
-  text-decoration: underline;
+  border-bottom-color: var(--primary-color);
+}
+
+.message-content a[target="_blank"]::after {
+  content: ' ↗';
+  font-size: 0.8em;
+  vertical-align: super;
 }
 
 .user-message .message-content a {
   color: #fff;
-  text-decoration: underline;
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+.user-message .message-content a:hover {
+  border-bottom-color: #fff;
 }
 
 .ai-message .message-content a {
   color: var(--primary-alt);
-  text-decoration: underline;
+  border-bottom-color: rgba(24, 144, 255, 0.3);
+}
+
+.ai-message .message-content a:hover {
+  border-bottom-color: var(--primary-alt);
 }
 
 /* ---------- Images ---------- */
@@ -1604,7 +1891,7 @@ input, textarea, select {
   #input-toggle-btn {
     width: 70px;
     height: 20px;
-    font-size: 12px !important;
+    font-size: 12px;
   }
 
   .storage-btn-group {
@@ -1654,6 +1941,17 @@ input, textarea, select {
   bottom: 0;
   background: rgba(0, 0, 0, 0.4);
   z-index: 9997;
+}
+
+/* Mobile panel backdrop */
+.panel-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1000;
 }
 
 .sidebar-overlay-fade-enter-active,
@@ -1741,6 +2039,14 @@ input, textarea, select {
     height: 48px;
     min-width: 48px;
     min-height: 48px;
+  }
+
+  #stop-button {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    font-size: 18px;
   }
 
   #input-toggle-btn {
@@ -1848,11 +2154,33 @@ input, textarea, select {
     height: 60px;
   }
 
-  /* Config/theme panel mobile */
+  /* Config/theme panel mobile - bottom sheet */
   .config-selector {
-    right: 8px;
-    width: calc(100% - 16px);
+    right: 0;
+    left: 0;
+    top: auto;
+    bottom: 0;
+    width: 100%;
     max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 85vh;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-out, opacity 0.2s ease-out;
+  }
+
+  .config-selector.open {
+    transform: translateY(0);
+    max-height: 85vh;
+  }
+
+  .config-selector::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border-color);
+    border-radius: 2px;
+    margin: 8px auto;
   }
 
   /* Scroll down button position */
@@ -1888,6 +2216,51 @@ input, textarea, select {
   .export-dropdown {
     right: auto;
     left: 0;
+  }
+
+  /* Touch-friendly message controls */
+  .msg-more-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+  }
+
+  .rename-confirm-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+  }
+
+  .quick-delete-btn {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px;
+    font-size: 14px;
+  }
+
+  /* Config panel mobile fixes */
+  .host-add-row,
+  .model-add-row,
+  .model-error-row {
+    margin-left: 0 !important;
+  }
+
+  /* Confirm dialog mobile fix */
+  .confirm-dialog {
+    min-width: 0;
+    width: calc(100% - 32px);
+    max-width: 400px;
+  }
+
+  /* In-chat search bar mobile fix */
+  .in-chat-search-bar {
+    right: 8px;
+    left: 8px;
+  }
+
+  .in-chat-search-input {
+    width: 100%;
+    min-width: 0;
   }
 }
 
@@ -2040,6 +2413,77 @@ textarea:focus:not(:focus-visible) {
 .shortcut-desc {
   font-size: 13px;
   color: var(--text-main);
+}
+
+/* Help tips */
+.help-tips {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.help-tips-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 10px;
+}
+
+.help-tip {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  padding-left: 12px;
+  position: relative;
+}
+
+.help-tip::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: var(--primary-color);
+}
+
+/* Help statistics */
+.help-stats {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.help-stats-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px;
+  background: var(--bg-gray);
+  border-radius: var(--radius-sm);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary-color);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
 }
 
 /* Modal transition */

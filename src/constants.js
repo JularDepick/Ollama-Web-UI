@@ -2,7 +2,7 @@ export const CONST_CONFIG = {
   MODEL_LIST_TIMEOUT: 15000,
   MSG_REPLY_TIMEOUT: 120000,
   STREAM_SPEED_MAP: [0, 16, 32, 64, 128],
-  STREAM_TEXT_MAP: ['关闭流式', '16字/秒', '32字/秒', '64字/秒', '128字/秒'],
+  STREAM_TEXT_MAP: ['实时流式', '16字/秒', '32字/秒', '64字/秒', '128字/秒'],
   CONTEXT_LENGTH_MAP: [4096, 8192, 16384, 32768, 65536, 131072, 262144],
   CONTEXT_LENGTH_TEXT_MAP: ['4k', '8k', '16k', '32k', '64k', '128k', '256k'],
   STREAM_AUTO_SCROLL_TEXT: ['已关闭', '已开启']
@@ -19,13 +19,15 @@ export const STORAGE_KEYS = {
   codeBg: 'Ollama-Web-UI-Config-CodeBg',
   codeText: 'Ollama-Web-UI-Config-CodeText',
   modelList: 'Ollama-Web-UI-Config-ModelList',
-  hostHistory: 'Ollama-Web-UI-Config-HostHistory'
+  hostHistory: 'Ollama-Web-UI-Config-HostHistory',
+  templates: 'Ollama-Web-UI-Templates',
+  snippets: 'Ollama-Web-UI-Snippets'
 }
 
 export const DEFAULT_CONFIG = {
   ollamaHost: '',
   selectedModel: '',
-  streamSpeed: 1,
+  streamSpeed: 0,
   streamAutoScroll: 1,
   contextLength: 1
 }
@@ -247,25 +249,15 @@ export function applyThemeVars(vars) {
 }
 
 export function applyCustomTheme(primary) {
+  // Only update primary color variables, preserve existing bg/text settings
   const vars = {
     '--primary-color': primary,
     '--primary-rgb': hexToRgbStr(primary),
     '--primary-hover': darken(primary, 0.12),
     '--primary-light': lighten(primary, 0.6),
     '--primary-alt': lighten(primary, 0.15),
-    // Keep backgrounds/foregrounds light by default
-    '--bg-white': '#fff', '--bg-gray': '#f5f7fa', '--bg-gray-light': '#f0f2f5',
-    '--bg-dark': '#1e1e1e',
-    '--text-main': '#333', '--text-secondary': '#666',
-    '--text-light': '#999', '--text-muted': '#888',
-    '--text-danger': '#e53e3e', '--danger-hover': '#c93737',
-    '--border-color': '#e5e7eb', '--border-light': '#eee',
-    '--code-bg': '#f5f7fa', '--code-text': '#333',
-    '--code-btn-color': '#666', '--code-btn-hover-bg': '#ccc',
     '--pinned-bg': lighten(primary, 0.85),
-    '--temp-pinned-bg': lighten(primary, 0.9),
-    '--input-bg': '#f5f7fa', '--loading-bg': '#fff',
-    '--msg-ai-bg': '#fff'
+    '--temp-pinned-bg': lighten(primary, 0.9)
   }
   applyThemeVars(vars)
 }

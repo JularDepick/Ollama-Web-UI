@@ -5,8 +5,8 @@ import {
   THEMES, THEME_STORAGE_KEY, THEME_CUSTOM_COLOR_KEY,
   applyThemeVars, applyCustomTheme
 } from '@/constants'
-import { loadJSON, saveJSON, loadConfig, saveConfig, loadConversations, loadLastActiveChat, saveLastActiveChat } from '@/utils/storage'
-import { genId, mergeContinuousNewlines } from '@/utils/helpers'
+import { loadJSON, saveJSON, loadConfig, saveConfig, loadConversations, loadLastActiveChat, saveLastActiveChat, getStorageUsage, checkStorageQuota } from '@/utils/storage'
+import { genId, mergeContinuousNewlines, debounce } from '@/utils/helpers'
 
 export const useChatStore = defineStore('chat', () => {
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)) }
@@ -18,8 +18,21 @@ export const useChatStore = defineStore('chat', () => {
   const contextLength = ref(clamp(Number(loadConfig(STORAGE_KEYS.contextLength, DEFAULT_CONFIG.contextLength)), 0, 6))
   const streamAutoScroll = ref(Number(loadConfig(STORAGE_KEYS.streamAutoScroll, DEFAULT_CONFIG.streamAutoScroll)))
   const models = ref(loadJSON(STORAGE_KEYS.modelList, []))
+  const modelDetails = ref({}) // { modelName: { size, parameter_size, quantization_level, format } }
   const isLoadingModels = ref(false)
   const modelLoadError = ref('')
+
+  // Connection health check
+  const connectionStatus = ref('unknown') // 'connected' | 'disconnected' | 'checking' | 'unknown'
+  const lastConnectionCheck = ref(0)
+  let connectionCheckTimer = null
+
+  // Save status indicator
+  const saveStatus = ref('idle') // 'idle' | 'saving' | 'saved' | 'error'
+  let saveStatusTimer = null
+
+  // Model performance tracking
+  const modelPerformance = ref({}) // { modelName: { lastResponseTime, lastTokensPerSecond, totalCalls, avgResponseTime } }
 
   function persistModelList() {
     models.value.sort((a, b) => a.localeCompare(b))
@@ -66,12 +79,31 @@ export const useChatStore = defineStore('chat', () => {
   const inputCollapsed = ref(false)
   const searchPanelOpen = ref(false)
   const searchQuery = ref('')
+  // In-conversation search
+  const inChatSearchOpen = ref(false)
+  const inChatSearchQuery = ref('')
+  const inChatSearchIndex = ref(0)
   const isWaitingModelReply = ref(false)
   const isTempTipShowing = ref(false)
   const isOffline = ref(false)
   const toastMessage = ref('')
   const toastType = ref('info')
   const toastVisible = ref(false)
+
+  // ============ Confirm Dialog State ============
+  const confirmVisible = ref(false)
+  const confirmTitle = ref('')
+  const confirmMessage = ref('')
+  const confirmResolve = ref(null)
+
+  function showConfirm(title, message) {
+    return new Promise((resolve) => {
+      confirmTitle.value = title
+      confirmMessage.value = message
+      confirmVisible.value = true
+      confirmResolve.value = resolve
+    })
+  }
 
   // ============ Mobile State (U2) ============
   const isMobile = ref(window.innerWidth <= 768)
@@ -101,6 +133,30 @@ export const useChatStore = defineStore('chat', () => {
 
   function clearQuotedMessage() {
     quotedMessage.value = null
+  }
+
+  // ============ Draft State (auto-save) ============
+  const drafts = ref(loadJSON('ollama_drafts', {}))
+
+  function saveDraft(convId, text) {
+    if (!convId) return
+    if (text && text.trim()) {
+      drafts.value[convId] = text
+    } else {
+      delete drafts.value[convId]
+    }
+    saveJSON('ollama_drafts', drafts.value)
+  }
+
+  function getDraft(convId) {
+    return drafts.value[convId] || ''
+  }
+
+  function clearDraft(convId) {
+    if (convId && drafts.value[convId]) {
+      delete drafts.value[convId]
+      saveJSON('ollama_drafts', drafts.value)
+    }
   }
 
   // ============ Message Search State (F3) ============
@@ -142,6 +198,58 @@ export const useChatStore = defineStore('chat', () => {
         setTimeout(() => el.classList.remove('search-target-highlight'), 2000)
       }
     }, 100)
+  }
+
+  // ============ In-conversation search ============
+  const inChatSearchResults = computed(() => {
+    const q = inChatSearchQuery.value.trim().toLowerCase()
+    if (!q) return []
+    return currentMessages.value
+      .filter(m => m.content && m.content.toLowerCase().includes(q))
+      .map(m => m.id)
+  })
+
+  const inChatSearchTotal = computed(() => inChatSearchResults.value.length)
+  const inChatSearchCurrentMsgId = computed(() => {
+    const results = inChatSearchResults.value
+    if (!results.length) return null
+    const idx = Math.min(inChatSearchIndex.value, results.length - 1)
+    return results[idx]
+  })
+
+  function nextInChatSearchResult() {
+    const total = inChatSearchTotal.value
+    if (!total) return
+    inChatSearchIndex.value = (inChatSearchIndex.value + 1) % total
+    scrollToInChatSearchResult()
+  }
+
+  function prevInChatSearchResult() {
+    const total = inChatSearchTotal.value
+    if (!total) return
+    inChatSearchIndex.value = (inChatSearchIndex.value - 1 + total) % total
+    scrollToInChatSearchResult()
+  }
+
+  function scrollToInChatSearchResult() {
+    const msgId = inChatSearchCurrentMsgId.value
+    if (!msgId) return
+    setTimeout(() => {
+      const el = document.querySelector(`[data-msg-id="${msgId}"]`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('search-target-highlight')
+        setTimeout(() => el.classList.remove('search-target-highlight'), 1500)
+      }
+    }, 50)
+  }
+
+  function toggleInChatSearch() {
+    inChatSearchOpen.value = !inChatSearchOpen.value
+    if (!inChatSearchOpen.value) {
+      inChatSearchQuery.value = ''
+      inChatSearchIndex.value = 0
+    }
   }
 
   // ============ Streaming State ============
@@ -216,8 +324,15 @@ export const useChatStore = defineStore('chat', () => {
     return Array.from(tagSet).sort()
   })
 
+  const showArchived = ref(false)
+  const archivedCount = computed(() => Object.values(conversations.value).filter(c => c.archived).length)
+
   const filteredConversationIds = computed(() => {
     let ids = sortedConversationIds.value
+    // Archive filter
+    if (!showArchived.value) {
+      ids = ids.filter(id => !conversations.value[id]?.archived)
+    }
     // Search term filter
     const term = conversationSearchTerm.value.trim().toLowerCase()
     if (term) {
@@ -257,8 +372,22 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   // ============ Storage ============
+  const storageUsage = ref({ bytes: 0, limit: 5242880, percent: 0, formatted: '0 B', limitFormatted: '5 MB' })
+
+  function updateStorageUsage() {
+    storageUsage.value = getStorageUsage()
+  }
+
   function persistConversations() {
-    return saveJSON(STORAGE_KEYS.conversations, conversations.value)
+    saveStatus.value = 'saving'
+    clearTimeout(saveStatusTimer)
+    const result = saveJSON(STORAGE_KEYS.conversations, conversations.value)
+    // Check storage quota on every save (throttled by debounce on frequent saves)
+    checkStorageQuota(showToast)
+    updateStorageUsage()
+    saveStatus.value = result ? 'saved' : 'error'
+    saveStatusTimer = setTimeout(() => { saveStatus.value = 'idle' }, 2000)
+    return result
   }
 
   function persistLastActiveChat() {
@@ -275,6 +404,7 @@ export const useChatStore = defineStore('chat', () => {
       pinned: false,
       starredAt: 0,
       tempPinned: false,
+      archived: false,
       updateTime: Date.now(),
       systemPrompt: '',
       temperature: 0.7,
@@ -309,6 +439,38 @@ export const useChatStore = defineStore('chat', () => {
     persistLastActiveChat()
   }
 
+  function duplicateConversation(id) {
+    const src = conversations.value[id]
+    if (!src) return
+    const newId = genId()
+    const now = Date.now()
+    const newConv = {
+      ...JSON.parse(JSON.stringify(src)),
+      id: newId,
+      name: src.name + ' (副本)',
+      messages: src.messages.map(m => ({ ...m, id: genId() })),
+      createTime: now,
+      updateTime: now,
+      sortOrder: now
+    }
+    conversations.value[newId] = newConv
+    currentConversationId.value = newId
+    persistConversations()
+    persistLastActiveChat()
+    showToast('对话已复制', 'success')
+  }
+
+  function clearCurrentChat() {
+    const conv = conversations.value[currentConversationId.value]
+    if (!conv) return
+    conv.messages = []
+    conv.updateTime = Date.now()
+    latestAiMsgId.value = ''
+    latestUserMsgId.value = ''
+    persistConversations()
+    showToast('对话已清空', 'success')
+  }
+
   function renameConversation(id, newName) {
     if (conversations.value[id]) {
       conversations.value[id].name = newName
@@ -333,6 +495,33 @@ export const useChatStore = defineStore('chat', () => {
         conv.starredAt = Date.now()
       }
       persistConversations()
+    }
+  }
+
+  function archiveConversation(id) {
+    const conv = conversations.value[id]
+    if (conv) {
+      conv.archived = true
+      conv.archivedAt = Date.now()
+      persistConversations()
+      showToast('对话已归档', 'success')
+      // Switch to another conversation if archiving current
+      if (currentConversationId.value === id) {
+        const remaining = sortedConversationIds.value.filter(cid => !conversations.value[cid]?.archived)
+        currentConversationId.value = remaining[0] || ''
+        if (!currentConversationId.value) createNewConversation()
+        persistLastActiveChat()
+      }
+    }
+  }
+
+  function unarchiveConversation(id) {
+    const conv = conversations.value[id]
+    if (conv) {
+      conv.archived = false
+      conv.archivedAt = 0
+      persistConversations()
+      showToast('对话已恢复', 'success')
     }
   }
 
@@ -434,33 +623,35 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   // ============ Per-Conversation Parameter Actions (B4, B5) ============
+  const debouncedPersist = debounce(() => persistConversations(), 500)
+
   function setSystemPrompt(text) {
     const conv = conversations.value[currentConversationId.value]
     if (conv) {
       conv.systemPrompt = text
       conv.updateTime = Date.now()
-      persistConversations()
+      debouncedPersist()
     }
   }
 
   function setTemperature(val) {
     const conv = conversations.value[currentConversationId.value]
-    if (conv) { conv.temperature = val; persistConversations() }
+    if (conv) { conv.temperature = val; debouncedPersist() }
   }
 
   function setTopP(val) {
     const conv = conversations.value[currentConversationId.value]
-    if (conv) { conv.topP = val; persistConversations() }
+    if (conv) { conv.topP = val; debouncedPersist() }
   }
 
   function setTopK(val) {
     const conv = conversations.value[currentConversationId.value]
-    if (conv) { conv.topK = val; persistConversations() }
+    if (conv) { conv.topK = val; debouncedPersist() }
   }
 
   function setRepeatPenalty(val) {
     const conv = conversations.value[currentConversationId.value]
-    if (conv) { conv.repeatPenalty = val; persistConversations() }
+    if (conv) { conv.repeatPenalty = val; debouncedPersist() }
   }
 
   function setCurrentModel(val) {
@@ -488,6 +679,39 @@ export const useChatStore = defineStore('chat', () => {
     })
     return {
       messageCount: msgs.length,
+      tokenEstimate: Math.max(1, Math.round(totalChars / 4)),
+      modelFrequency: modelFreq
+    }
+  })
+
+  const globalStats = computed(() => {
+    const convs = Object.values(conversations.value)
+    let totalMessages = 0
+    let totalChars = 0
+    let userMessages = 0
+    let aiMessages = 0
+    const modelFreq = {}
+
+    convs.forEach(conv => {
+      if (conv.messages) {
+        totalMessages += conv.messages.length
+        conv.messages.forEach(m => {
+          totalChars += (m.content || '').length
+          if (m.role === 'user') userMessages++
+          else aiMessages++
+          if (m.model) {
+            modelFreq[m.model] = (modelFreq[m.model] || 0) + 1
+          }
+        })
+      }
+    })
+
+    return {
+      conversationCount: convs.length,
+      totalMessages,
+      userMessages,
+      aiMessages,
+      totalChars,
       tokenEstimate: Math.max(1, Math.round(totalChars / 4)),
       modelFrequency: modelFreq
     }
@@ -552,6 +776,232 @@ export const useChatStore = defineStore('chat', () => {
     showToast('已批量导出', 'success')
   }
 
+  function backupAllData() {
+    const backup = {
+      version: 1,
+      timestamp: Date.now(),
+      conversations: conversations.value,
+      settings: {
+        ollamaHost: ollamaHost.value,
+        selectedModel: selectedModel.value,
+        streamSpeed: streamSpeed.value,
+        contextLength: contextLength.value,
+        streamAutoScroll: streamAutoScroll.value
+      },
+      templates: templates.value,
+      snippets: snippets.value,
+      hostHistory: hostHistory.value
+    }
+    const data = JSON.stringify(backup, null, 2)
+    downloadFile(data, `Ollama-Web-UI-备份-${new Date().toISOString().slice(0, 10)}.json`, 'application/json')
+    showToast('备份已下载', 'success')
+  }
+
+  function restoreBackup(file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const backup = JSON.parse(e.target.result)
+        if (!backup.version || !backup.conversations) {
+          showToast('备份文件格式无效', 'error')
+          return
+        }
+
+        // Restore conversations
+        conversations.value = backup.conversations
+
+        // Restore settings
+        if (backup.settings) {
+          if (backup.settings.ollamaHost) {
+            ollamaHost.value = backup.settings.ollamaHost
+            saveConfig(STORAGE_KEYS.ollamaHost, backup.settings.ollamaHost)
+          }
+          if (backup.settings.selectedModel) {
+            selectedModel.value = backup.settings.selectedModel
+            saveConfig(STORAGE_KEYS.selectedModel, backup.settings.selectedModel)
+          }
+          if (backup.settings.streamSpeed !== undefined) {
+            streamSpeed.value = backup.settings.streamSpeed
+            saveConfig(STORAGE_KEYS.streamSpeed, String(backup.settings.streamSpeed))
+          }
+          if (backup.settings.contextLength !== undefined) {
+            contextLength.value = backup.settings.contextLength
+            saveConfig(STORAGE_KEYS.contextLength, String(backup.settings.contextLength))
+          }
+          if (backup.settings.streamAutoScroll !== undefined) {
+            streamAutoScroll.value = backup.settings.streamAutoScroll
+            saveConfig(STORAGE_KEYS.streamAutoScroll, String(backup.settings.streamAutoScroll))
+          }
+        }
+
+        // Restore templates
+        if (backup.templates) {
+          templates.value = backup.templates
+          persistTemplates()
+        }
+
+        // Restore snippets
+        if (backup.snippets) {
+          snippets.value = backup.snippets
+          persistSnippets()
+        }
+
+        // Restore host history
+        if (backup.hostHistory) {
+          hostHistory.value = backup.hostHistory
+          persistHostHistory()
+        }
+
+        persistConversations()
+        showToast('备份已恢复', 'success')
+      } catch {
+        showToast('恢复失败: 文件解析错误', 'error')
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  function exportCurrentConversationHtml() {
+    const conv = currentConversation.value
+    if (!conv || !conv.messages.length) {
+      showToast('当前对话无消息可导出', 'warning')
+      return
+    }
+    const timeStr = new Date().toLocaleString()
+    let messagesHtml = ''
+    for (const msg of conv.messages) {
+      const isUser = msg.role === 'user'
+      const label = isUser ? '用户' : 'AI'
+      const time = msg.sendTime ? new Date(msg.sendTime).toLocaleTimeString() : ''
+      const escapedContent = (msg.content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      messagesHtml += `<div class="msg ${isUser ? 'user' : 'ai'}"><div class="msg-header"><span class="msg-label">${label}</span><span class="msg-time">${time}</span></div><div class="msg-content">${escapedContent}</div></div>\n`
+    }
+    const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${conv.name || '对话'}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;max-width:800px;margin:0 auto;padding:24px;background:#f5f7fa;color:#333;line-height:1.6}
+h1{font-size:22px;color:#1677ff;border-bottom:2px solid #1677ff;padding-bottom:10px;margin-bottom:12px}
+.meta{color:#888;font-size:13px;margin-bottom:24px}
+.msg{margin-bottom:16px;padding:14px 18px;border-radius:12px;max-width:85%}
+.msg.user{background:linear-gradient(135deg,#1677ff,#4096ff);color:#fff;margin-left:auto;border-top-right-radius:4px}
+.msg.ai{background:#fff;border:1px solid #e5e7eb;border-top-left-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.msg-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.msg-label{font-size:12px;font-weight:600;opacity:0.8}
+.msg-time{font-size:11px;opacity:0.6}
+.msg-content{line-height:1.7;font-size:15px;word-break:break-word}
+.msg-content code{background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:14px}
+.msg.user .msg-content code{background:rgba(255,255,255,0.2)}
+.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#999}
+@media print{body{background:#fff;padding:12px}.msg{break-inside:avoid}}
+</style>
+</head>
+<body>
+<h1>${conv.name || '未命名对话'}</h1>
+<div class="meta">导出时间: ${timeStr} | 消息数: ${conv.messages.length}</div>
+${messagesHtml}
+<div class="footer">由 Ollama-Web-UI 导出</div>
+</body>
+</html>`
+    downloadFile(html, `对话-${conv.name || '未命名'}.html`, 'text/html')
+    showToast('已导出 HTML', 'success')
+  }
+
+  function printConversation() {
+    const conv = currentConversation.value
+    if (!conv || !conv.messages.length) {
+      showToast('当前对话无消息可打印', 'warning')
+      return
+    }
+    const timeStr = new Date().toLocaleString()
+    let messagesHtml = ''
+    for (const msg of conv.messages) {
+      const isUser = msg.role === 'user'
+      const label = isUser ? '用户' : 'AI'
+      const time = msg.sendTime ? new Date(msg.sendTime).toLocaleTimeString() : ''
+      const escapedContent = (msg.content || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      messagesHtml += `<div class="msg ${isUser ? 'user' : 'ai'}"><div class="msg-header"><span class="msg-label">${label}</span><span class="msg-time">${time}</span></div><div class="msg-content">${escapedContent}</div></div>\n`
+    }
+    const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${conv.name || '对话'}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;max-width:800px;margin:0 auto;padding:24px;background:#fff;color:#333;line-height:1.6}
+h1{font-size:22px;color:#1677ff;border-bottom:2px solid #1677ff;padding-bottom:10px;margin-bottom:12px}
+.meta{color:#888;font-size:13px;margin-bottom:24px}
+.msg{margin-bottom:16px;padding:14px 18px;border-radius:12px;max-width:85%}
+.msg.user{background:linear-gradient(135deg,#1677ff,#4096ff);color:#fff;margin-left:auto;border-top-right-radius:4px}
+.msg.ai{background:#fff;border:1px solid #e5e7eb;border-top-left-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.msg-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.msg-label{font-size:12px;font-weight:600;opacity:0.8}
+.msg-time{font-size:11px;opacity:0.6}
+.msg-content{line-height:1.7;font-size:15px;word-break:break-word}
+.msg-content code{background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:14px}
+.msg.user .msg-content code{background:rgba(255,255,255,0.2)}
+.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;color:#999}
+@media print{body{padding:12px}.msg{break-inside:avoid}}
+</style>
+</head>
+<body>
+<h1>${conv.name || '未命名对话'}</h1>
+<div class="meta">打印时间: ${timeStr} | 消息数: ${conv.messages.length}</div>
+${messagesHtml}
+<div class="footer">由 Ollama-Web-UI 导出</div>
+<script>window.onload=function(){window.print()}<\/script>
+</body>
+</html>`
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(html)
+      printWindow.document.close()
+    } else {
+      showToast('请允许弹出窗口以打印', 'warning')
+    }
+  }
+
+  function copyConversationAsText() {
+    const conv = currentConversation.value
+    if (!conv || !conv.messages.length) {
+      showToast('当前对话无消息可复制', 'warning')
+      return
+    }
+    const timeStr = new Date().toLocaleString()
+    let text = `${conv.name || '未命名对话'}\n导出时间: ${timeStr}\n${'─'.repeat(30)}\n\n`
+    for (const msg of conv.messages) {
+      const label = msg.role === 'user' ? '【用户】' : '【AI】'
+      text += `${label}\n${msg.content}\n\n`
+    }
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('已复制对话文本', 'success')
+      }).catch(() => {
+        fallbackCopyText(text)
+      })
+    } else {
+      fallbackCopyText(text)
+    }
+  }
+
+  function fallbackCopyText(text) {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    showToast('已复制对话文本', 'success')
+  }
+
   function downloadFile(content, filename, mimeType) {
     const blob = new Blob([content], { type: mimeType })
     const url = URL.createObjectURL(blob)
@@ -562,6 +1012,136 @@ export const useChatStore = defineStore('chat', () => {
     a.click()
     document.body.removeChild(a)
     setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  function importConversations(file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result)
+        let imported = 0
+
+        // Handle both single conversation export and batch export
+        const entries = data.messages ? { [genId()]: data } : data
+
+        for (const [id, convData] of Object.entries(entries)) {
+          if (!convData.messages || !Array.isArray(convData.messages)) continue
+          const newId = genId()
+          conversations.value[newId] = {
+            id: newId,
+            name: convData.name || '导入的对话',
+            messages: convData.messages.map(m => ({
+              id: genId(),
+              role: m.role,
+              content: m.content || '',
+              sendTime: m.sendTime || Date.now(),
+              model: m.model || '',
+              thinkDuration: m.thinkDuration || 0
+            })),
+            pinned: false,
+            starredAt: 0,
+            tempPinned: false,
+            updateTime: convData.updateTime || Date.now(),
+            systemPrompt: '',
+            temperature: 0.7,
+            topP: 0.9,
+            topK: 40,
+            repeatPenalty: 1.1,
+            currentModel: selectedModel.value,
+            presets: [],
+            sortOrder: convData.updateTime || Date.now()
+          }
+          imported++
+        }
+
+        if (imported > 0) {
+          persistConversations()
+          showToast(`已导入 ${imported} 个对话`, 'success')
+        } else {
+          showToast('文件格式无效', 'error')
+        }
+      } catch {
+        showToast('导入失败: 文件解析错误', 'error')
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  function importMarkdown(file) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const content = e.target.result
+        const lines = content.split('\n')
+        const messages = []
+        let currentRole = null
+        let currentContent = []
+
+        for (const line of lines) {
+          // Check for role headers like "## 用户" or "## AI"
+          if (line.startsWith('## 用户') || line.startsWith('## User')) {
+            if (currentRole && currentContent.length) {
+              messages.push({ role: currentRole, content: currentContent.join('\n').trim() })
+            }
+            currentRole = 'user'
+            currentContent = []
+          } else if (line.startsWith('## AI') || line.startsWith('## Assistant')) {
+            if (currentRole && currentContent.length) {
+              messages.push({ role: currentRole, content: currentContent.join('\n').trim() })
+            }
+            currentRole = 'assistant'
+            currentContent = []
+          } else if (currentRole) {
+            currentContent.push(line)
+          }
+        }
+        // Add last message
+        if (currentRole && currentContent.length) {
+          messages.push({ role: currentRole, content: currentContent.join('\n').trim() })
+        }
+
+        if (messages.length === 0) {
+          showToast('未找到有效的对话内容', 'warning')
+          return
+        }
+
+        // Create conversation
+        const newId = genId()
+        const now = Date.now()
+        conversations.value[newId] = {
+          id: newId,
+          name: file.name.replace(/\.md$/i, '') || '导入的对话',
+          messages: messages.map(m => ({
+            id: genId(),
+            role: m.role,
+            content: m.content,
+            sendTime: now,
+            model: '',
+            thinkDuration: 0
+          })),
+          pinned: false,
+          starredAt: 0,
+          tempPinned: false,
+          archived: false,
+          updateTime: now,
+          systemPrompt: '',
+          temperature: 0.7,
+          topP: 0.9,
+          topK: 40,
+          repeatPenalty: 1.1,
+          currentModel: selectedModel.value,
+          presets: [],
+          sortOrder: now
+        }
+        currentConversationId.value = newId
+        persistConversations()
+        persistLastActiveChat()
+        showToast(`已导入 ${messages.length} 条消息`, 'success')
+      } catch {
+        showToast('导入失败: Markdown 解析错误', 'error')
+      }
+    }
+    reader.readAsText(file)
   }
 
   // ============ Config Actions ============
@@ -590,6 +1170,41 @@ export const useChatStore = defineStore('chat', () => {
     saveConfig(STORAGE_KEYS.streamAutoScroll, String(val))
   }
 
+  async function checkConnection() {
+    if (!ollamaHost.value) {
+      connectionStatus.value = 'unknown'
+      return
+    }
+    connectionStatus.value = 'checking'
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      const res = await fetch(`${ollamaHost.value}/api/tags`, { method: 'GET', signal: controller.signal })
+      clearTimeout(timeoutId)
+      const prev = connectionStatus.value
+      connectionStatus.value = res.ok ? 'connected' : 'disconnected'
+      lastConnectionCheck.value = Date.now()
+      // Notify on status change
+      if (prev === 'connected' && !res.ok) {
+        showToast('Ollama 连接断开', 'error')
+      } else if (prev === 'disconnected' && res.ok) {
+        showToast('Ollama 已重新连接', 'success')
+      }
+    } catch {
+      const prev = connectionStatus.value
+      connectionStatus.value = 'disconnected'
+      lastConnectionCheck.value = Date.now()
+      if (prev === 'connected') {
+        showToast('Ollama 连接断开', 'error')
+      }
+    }
+  }
+
+  function startConnectionMonitor() {
+    if (connectionCheckTimer) clearInterval(connectionCheckTimer)
+    connectionCheckTimer = setInterval(checkConnection, 30000) // every 30s
+  }
+
   async function loadModelList() {
     if (!ollamaHost.value) return
     isLoadingModels.value = true
@@ -603,6 +1218,16 @@ export const useChatStore = defineStore('chat', () => {
       const resData = await res.json()
       const fetchedModels = resData.models || []
       const apiNames = fetchedModels.map(m => m.name)
+
+      // Store model details
+      fetchedModels.forEach(m => {
+        modelDetails.value[m.name] = {
+          size: m.size || 0,
+          parameter_size: m.details?.parameter_size || '',
+          quantization_level: m.details?.quantization_level || '',
+          format: m.details?.format || ''
+        }
+      })
 
       // Merge API names into existing list (deduplicate, don't overwrite)
       apiNames.forEach(name => {
@@ -766,8 +1391,8 @@ export const useChatStore = defineStore('chat', () => {
     return msg || null
   }
 
-  /** @returns {Promise<string>} message content from the Ollama API */
-  async function executeApiCall(messages, signal) {
+  /** @returns {Promise<string>} message content from the Ollama API (SSE stream) */
+  async function executeApiCall(messages, signal, onChunk) {
     const model = currentConversation.value?.currentModel || selectedModel.value
     const res = await fetch(`${ollamaHost.value}/api/chat`, {
       method: 'POST',
@@ -775,7 +1400,7 @@ export const useChatStore = defineStore('chat', () => {
       body: JSON.stringify({
         model,
         messages,
-        stream: false,
+        stream: true,
         options: {
           temperature: currentConversation.value?.temperature ?? 0.7,
           top_p: currentConversation.value?.topP ?? 0.9,
@@ -790,44 +1415,89 @@ export const useChatStore = defineStore('chat', () => {
     clearTimeout(activeTimeoutId)
     activeTimeoutId = null
     if (!res.ok) throw new Error(`API异常: ${res.status}`)
-    const resData = await res.json()
-    return resData.message?.content || ''
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let fullContent = ''
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() // keep incomplete line in buffer
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        try {
+          const data = JSON.parse(trimmed)
+          if (data.message?.content) {
+            fullContent += data.message.content
+            if (onChunk) onChunk(fullContent)
+          }
+          if (data.done) break
+        } catch { /* skip malformed lines */ }
+      }
+    }
+    // Process any remaining buffer
+    if (buffer.trim()) {
+      try {
+        const data = JSON.parse(buffer.trim())
+        if (data.message?.content) {
+          fullContent += data.message.content
+          if (onChunk) onChunk(fullContent)
+        }
+      } catch { /* ignore */ }
+    }
+    return fullContent
   }
 
-  /** Handle typewriter/rendering and persistence after a successful API call */
+  /** Handle persistence and optional typewriter after streaming completes */
   async function handleStreamResult(aiMsg, fullContent, thinkStartTime) {
+    const thinkDuration = Math.floor((Date.now() - thinkStartTime) / 1000)
     const speed = CONST_CONFIG.STREAM_SPEED_MAP[streamSpeed.value] || 0
     if (speed > 0 && fullContent) {
+      // Typewriter replay effect on already-streamed content
       isStreamingActive.value = true
       await typewriteMessage(aiMsg, fullContent, thinkStartTime)
       isStreamingActive.value = false
       scrollTrigger.value++
     } else {
-      const thinkDuration = Math.floor((Date.now() - thinkStartTime) / 1000)
       updateAiMessage(aiMsg, fullContent, thinkDuration)
     }
     currentStreamingMsgId.value = null
     persistConversations()
   }
 
-  /** Handle API errors: toast, log, cleanup empty AI message */
+  /** Handle API errors: toast, mark message as failed for retry */
   function handleSendError(e, failedPayload, aiMsg) {
     clearTimeout(activeTimeoutId)
     activeTimeoutId = null
     currentStreamingMsgId.value = null
 
     if (e.name === 'AbortError') {
-      showToast('请求超时或已取消', 'error')
-    } else {
-      showToast('请求失败: ' + e.message, 'error')
+      // User cancelled — remove the empty AI message
+      const conv = conversations.value[currentConversationId.value]
+      if (conv) {
+        const idx = conv.messages.findIndex(m => m.id === aiMsg.id)
+        if (idx !== -1 && conv.messages[idx].content === '') {
+          conv.messages.splice(idx, 1)
+        }
+        persistConversations()
+      }
+      return
     }
 
-    // Clean up empty AI message
+    showToast('请求失败: ' + e.message, 'error')
+
+    // Mark AI message as failed for retry
     const conv = conversations.value[currentConversationId.value]
     if (conv) {
       const idx = conv.messages.findIndex(m => m.id === aiMsg.id)
-      if (idx !== -1 && conv.messages[idx].content === '') {
-        conv.messages.splice(idx, 1)
+      if (idx !== -1) {
+        conv.messages[idx].error = e.message
+        conv.messages[idx].failedPayload = failedPayload
       }
       persistConversations()
     }
@@ -847,8 +1517,33 @@ export const useChatStore = defineStore('chat', () => {
     const thinkStartTime = Date.now()
 
     try {
-      const fullContent = await executeApiCall(buildMessages(), signal)
+      const speed = CONST_CONFIG.STREAM_SPEED_MAP[streamSpeed.value] || 0
+      // Real-time streaming callback: update message as chunks arrive
+      const onChunk = speed <= 0 ? (content) => {
+        const thinkDuration = Math.floor((Date.now() - thinkStartTime) / 1000)
+        updateAiMessage(aiMsg, content, thinkDuration)
+        scrollTrigger.value++
+      } : null
+
+      const fullContent = await executeApiCall(buildMessages(), signal, onChunk)
       await handleStreamResult(aiMsg, fullContent, thinkStartTime)
+
+      // Track model performance
+      const responseTime = Date.now() - thinkStartTime
+      const currentModel = currentConversation.value?.currentModel || selectedModel.value
+      if (currentModel && fullContent) {
+        const charCount = fullContent.length
+        const tps = charCount / (responseTime / 1000) // chars per second as proxy
+        const prev = modelPerformance.value[currentModel] || { totalCalls: 0, avgResponseTime: 0 }
+        const newTotal = prev.totalCalls + 1
+        const newAvg = ((prev.avgResponseTime * prev.totalCalls) + responseTime) / newTotal
+        modelPerformance.value[currentModel] = {
+          lastResponseTime: responseTime,
+          lastTokensPerSecond: Math.round(tps * 10) / 10,
+          totalCalls: newTotal,
+          avgResponseTime: Math.round(newAvg)
+        }
+      }
     } catch (e) {
       handleSendError(e, failedPayload, aiMsg)
     } finally {
@@ -865,6 +1560,12 @@ export const useChatStore = defineStore('chat', () => {
     // Ensure a conversation exists
     if (!currentConversationId.value || !conversations.value[currentConversationId.value]) {
       createNewConversation()
+    }
+
+    // Auto-generate title from first message
+    const conv = conversations.value[currentConversationId.value]
+    if (conv && conv.messages.length === 0 && conv.name === '新对话') {
+      conv.name = msg.slice(0, 30) + (msg.length > 30 ? '...' : '')
     }
 
     isWaitingModelReply.value = true
@@ -955,6 +1656,17 @@ export const useChatStore = defineStore('chat', () => {
     isStreamingActive.value = false
   }
 
+  function cancelGeneration() {
+    if (activeAbortController) {
+      activeAbortController.abort()
+      activeAbortController = null
+    }
+    isWaitingModelReply.value = false
+    isStreamingActive.value = false
+    currentStreamingMsgId.value = null
+    showToast('已停止生成', 'info')
+  }
+
   function findMessage(msgId) {
     const conv = conversations.value[currentConversationId.value]
     if (!conv) return null
@@ -1001,6 +1713,58 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage(content)
   }
 
+  async function retryMessage(msgId) {
+    const conv = conversations.value[currentConversationId.value]
+    if (!conv) return
+    const idx = conv.messages.findIndex(m => m.id === msgId)
+    if (idx === -1 || conv.messages[idx].role !== 'assistant' || !conv.messages[idx].error) return
+
+    const msg = conv.messages[idx]
+    const failedPayload = msg.failedPayload
+
+    // Clear error state and reset message
+    msg.error = undefined
+    msg.failedPayload = undefined
+    msg.content = ''
+    msg.thinkDuration = 0
+    persistConversations()
+
+    isWaitingModelReply.value = true
+    clearToast()
+    isStreamingActive.value = false
+    latestAiMsgId.value = msg.id
+    currentStreamingMsgId.value = msg.id
+    scrollTrigger.value++
+
+    await _executeSendFlow(msg, failedPayload)
+  }
+
+  async function regenerateMessage(msgId) {
+    if (isWaitingModelReply.value) return
+    const conv = conversations.value[currentConversationId.value]
+    if (!conv) return
+    const idx = conv.messages.findIndex(m => m.id === msgId)
+    if (idx === -1 || conv.messages[idx].role !== 'assistant') return
+
+    // Remove the AI message
+    conv.messages.splice(idx, 1)
+    conv.updateTime = Date.now()
+    persistConversations()
+
+    // Re-send: create new AI message and call API
+    isWaitingModelReply.value = true
+    clearToast()
+    isStreamingActive.value = false
+    latestAiMsgId.value = ''
+
+    const aiMsg = addMessage('assistant', '', { thinkDuration: 0 })
+    scrollTrigger.value++
+    latestAiMsgId.value = aiMsg.id
+    currentStreamingMsgId.value = aiMsg.id
+
+    await _executeSendFlow(aiMsg, null)
+  }
+
   // ============ Initialization ============
   function initialize() {
     // Apply saved theme
@@ -1020,6 +1784,7 @@ export const useChatStore = defineStore('chat', () => {
       if (!conv.hasOwnProperty('starredAt')) { conv.starredAt = 0; needsSave = true }
       if (!conv.hasOwnProperty('tags')) { conv.tags = []; needsSave = true }
       if (!conv.hasOwnProperty('tempPinned')) { conv.tempPinned = false; needsSave = true }
+      if (!conv.hasOwnProperty('archived')) { conv.archived = false; needsSave = true }
       if (!conv.hasOwnProperty('updateTime')) { conv.updateTime = Date.now(); needsSave = true }
       if (!conv.hasOwnProperty('systemPrompt')) { conv.systemPrompt = ''; needsSave = true }
       if (!conv.hasOwnProperty('temperature')) { conv.temperature = 0.7; needsSave = true }
@@ -1070,6 +1835,8 @@ export const useChatStore = defineStore('chat', () => {
     // Auto-fetch models if host is configured
     if (ollamaHost.value) {
       loadModelList()
+      checkConnection()
+      startConnectionMonitor()
     }
 
     // Ensure current host is in history
@@ -1084,33 +1851,130 @@ export const useChatStore = defineStore('chat', () => {
     window.addEventListener('offline', () => { isOffline.value = true })
   }
 
+  // ============ Conversation Templates ============
+  const templates = ref(loadJSON(STORAGE_KEYS.templates, []))
+
+  function persistTemplates() {
+    saveJSON(STORAGE_KEYS.templates, templates.value)
+  }
+
+  function saveTemplate(name) {
+    const conv = currentConversation.value
+    if (!conv) return
+    const template = {
+      id: genId(),
+      name: name || conv.name,
+      systemPrompt: conv.systemPrompt || '',
+      model: conv.currentModel || selectedModel.value,
+      temperature: conv.temperature ?? 0.7,
+      topP: conv.topP ?? 0.9,
+      topK: conv.topK ?? 40,
+      repeatPenalty: conv.repeatPenalty ?? 1.1,
+      createdAt: Date.now()
+    }
+    templates.value.push(template)
+    persistTemplates()
+    showToast('模板已保存', 'success')
+    return template
+  }
+
+  function loadTemplate(templateId) {
+    const tpl = templates.value.find(t => t.id === templateId)
+    if (!tpl) return
+    const conv = currentConversation.value
+    if (!conv) return
+    conv.systemPrompt = tpl.systemPrompt
+    conv.currentModel = tpl.model
+    conv.temperature = tpl.temperature
+    conv.topP = tpl.topP
+    conv.topK = tpl.topK
+    conv.repeatPenalty = tpl.repeatPenalty
+    if (tpl.model && models.value.includes(tpl.model)) {
+      selectedModel.value = tpl.model
+      saveConfig(STORAGE_KEYS.selectedModel, tpl.model)
+    }
+    persistConversations()
+    showToast('模板已应用', 'success')
+  }
+
+  function deleteTemplate(templateId) {
+    const idx = templates.value.findIndex(t => t.id === templateId)
+    if (idx === -1) return
+    templates.value.splice(idx, 1)
+    persistTemplates()
+    showToast('模板已删除', 'success')
+  }
+
+  // ============ Prompt Snippets ============
+  const snippets = ref(loadJSON(STORAGE_KEYS.snippets, []))
+
+  function persistSnippets() {
+    saveJSON(STORAGE_KEYS.snippets, snippets.value)
+  }
+
+  function saveSnippet(name, content) {
+    if (!content || !content.trim()) return
+    const snippet = {
+      id: genId(),
+      name: name || content.slice(0, 30),
+      content: content.trim(),
+      createdAt: Date.now()
+    }
+    snippets.value.unshift(snippet)
+    persistSnippets()
+    showToast('片段已保存', 'success')
+    return snippet
+  }
+
+  function insertSnippet(snippetId) {
+    const s = snippets.value.find(s => s.id === snippetId)
+    return s ? s.content : ''
+  }
+
+  function deleteSnippet(snippetId) {
+    const idx = snippets.value.findIndex(s => s.id === snippetId)
+    if (idx === -1) return
+    snippets.value.splice(idx, 1)
+    persistSnippets()
+    showToast('片段已删除', 'success')
+  }
+
   return {
     // State
-    ollamaHost, selectedModel, streamSpeed, contextLength, streamAutoScroll, models, isLoadingModels, modelLoadError,
+    ollamaHost, selectedModel, streamSpeed, contextLength, streamAutoScroll, models, modelDetails, isLoadingModels, modelLoadError, storageUsage,
+    connectionStatus, checkConnection, saveStatus, modelPerformance,
     conversations, currentConversationId, conversationSearchTerm,
     sidebarCollapsed, configPanelOpen, inputCollapsed, searchPanelOpen, searchQuery,
     isWaitingModelReply, isTempTipShowing, isOffline,
     toastMessage, toastType, toastVisible,
+    confirmVisible, confirmTitle, confirmMessage, confirmResolve, showConfirm,
     isMobile, mobileSidebarOpen, updateIsMobile, helpPanelOpen,
     currentStreamingMsgId, latestAiMsgId, latestUserMsgId, isStreamingActive, scrollTrigger,
     quotedMessage, setQuotedMessage, clearQuotedMessage,
+    drafts, saveDraft, getDraft, clearDraft,
+    templates, saveTemplate, loadTemplate, deleteTemplate,
+    snippets, saveSnippet, insertSnippet, deleteSnippet,
     searchResults, searchResultCount, navigateToSearchResult,
+    inChatSearchOpen, inChatSearchQuery, inChatSearchIndex, inChatSearchResults, inChatSearchTotal, inChatSearchCurrentMsgId,
+    nextInChatSearchResult, prevInChatSearchResult, toggleInChatSearch,
     // Getters
     currentConversation, currentMessages,
     sortedConversationIds, filteredConversationIds, hasConversations,
     // Actions
     showToast, clearToast,
-    createNewConversation, deleteConversation, renameConversation, reorderConversation,
-    togglePinConversation, toggleStarConversation,
+    createNewConversation, deleteConversation, duplicateConversation, clearCurrentChat, renameConversation, reorderConversation,
+    togglePinConversation, toggleStarConversation, archiveConversation, unarchiveConversation,
+    showArchived, archivedCount,
     activeTagFilter, availableTags, setConversationTags,
-    currentConversationStats, switchConversation,
+    currentConversationStats, globalStats, switchConversation,
     setOllamaHost, setSelectedModel, setStreamSpeed, setContextLength, setStreamAutoScroll,
     loadModelList, clearConfigData, clearAllData,
     addCustomModel, removeModel, hostHistory, addHostToHistory, removeHostFromHistory,
     setSystemPrompt, setTemperature, setTopP, setTopK, setRepeatPenalty, setCurrentModel,
     currentPresets, savePreset, deletePreset, applyPreset,
-    exportCurrentConversationJson, exportCurrentConversationMarkdown, exportAllConversations,
-    addMessage, deleteMessage, sendMessage, saveEditedMessage, resendMessage, replayStreaming, skipStreaming,
+    exportCurrentConversationJson, exportCurrentConversationMarkdown, exportCurrentConversationHtml, exportAllConversations, importConversations, importMarkdown, copyConversationAsText, printConversation,
+    backupAllData, restoreBackup,
+    addMessage, deleteMessage, sendMessage, saveEditedMessage, resendMessage, retryMessage, regenerateMessage, replayStreaming, skipStreaming, cancelGeneration,
     persistConversations, initialize,
     selectTheme, setCustomColor
   }

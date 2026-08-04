@@ -73,3 +73,39 @@ export function clearConfigKeys() {
 export function clearAllKeys() {
   Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k))
 }
+
+// ---------- Storage Size Monitoring ----------
+export function getStorageUsage() {
+  let total = 0
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    const value = localStorage.getItem(key)
+    total += (key?.length || 0) + (value?.length || 0)
+  }
+  // Characters to bytes (UTF-16)
+  const bytes = total * 2
+  const limit = 5 * 1024 * 1024 // 5MB typical limit
+  return {
+    bytes,
+    limit,
+    percent: Math.round((bytes / limit) * 100),
+    formatted: formatBytes(bytes),
+    limitFormatted: formatBytes(limit)
+  }
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+export function checkStorageQuota(onWarning) {
+  const usage = getStorageUsage()
+  if (usage.percent >= 90) {
+    onWarning(`存储空间即将用尽 (${usage.percent}%), 请导出备份并清理旧对话`, 'error')
+  } else if (usage.percent >= 70) {
+    onWarning(`存储空间使用 ${usage.percent}%`, 'warning')
+  }
+  return usage
+}

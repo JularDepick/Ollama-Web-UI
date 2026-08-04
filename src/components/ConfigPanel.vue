@@ -52,7 +52,14 @@
                     <div class="model-select-dropdown" v-if="modelDropdownOpen">
                       <div v-if="store.models.length === 0" class="model-select-empty">暂无可用模型</div>
                       <div v-for="m in store.models" :key="m" class="model-select-item" :class="{ active: m === store.selectedModel }" @mousedown.prevent="selectModel(m)">
-                        <span class="model-select-name">{{ m }}</span>
+                        <div class="model-select-info">
+                          <span class="model-select-name">{{ m }}</span>
+                          <span v-if="store.modelDetails[m]" class="model-select-meta">
+                            <span v-if="store.modelDetails[m].parameter_size">{{ store.modelDetails[m].parameter_size }}</span>
+                            <span v-if="store.modelDetails[m].quantization_level">{{ store.modelDetails[m].quantization_level }}</span>
+                            <span v-if="store.modelDetails[m].size">{{ formatSize(store.modelDetails[m].size) }}</span>
+                          </span>
+                        </div>
                         <span class="model-select-del" @mousedown.stop.prevent="deleteModel(m)" title="删除">×</span>
                       </div>
                     </div>
@@ -109,8 +116,14 @@
           <div class="storage-collapse">
             <div class="storage-collapse-header" :class="{ expanded: storageOpen }" @click="storageOpen = !storageOpen">本地储存管理</div>
             <div class="storage-collapse-body" :class="{ expanded: storageOpen }">
+              <div class="storage-usage">
+                <div class="storage-usage-bar">
+                  <div class="storage-usage-fill" :style="{ width: store.storageUsage.percent + '%' }" :class="{ warning: store.storageUsage.percent >= 70, danger: store.storageUsage.percent >= 90 }"></div>
+                </div>
+                <div class="storage-usage-text">{{ store.storageUsage.formatted }} / {{ store.storageUsage.limitFormatted }} ({{ store.storageUsage.percent }}%)</div>
+              </div>
               <div class="storage-btn-group">
-                <button class="config-btn" @click="store.clearConfigData()">清除配置选项储存数据</button>
+                <button class="config-btn" :class="{ 'confirm-delete': confirmingConfigClear }" @click="handleClearConfig">{{ confirmingConfigClear ? '确认清除' : '清除配置选项储存数据' }}</button>
                 <button class="config-btn danger" :class="{ 'confirm-delete': confirmingClear }" @click="handleClearAll">{{ confirmingClear ? '确认清除' : '清除所有相关储存数据' }}</button>
               </div>
             </div>
@@ -235,6 +248,7 @@ const tabIndicatorStyle = computed(() => {
 const storageOpen = ref(false)
 const hostError = ref('')
 const confirmingClear = ref(false)
+const confirmingConfigClear = ref(false)
 const customModelInput = ref('')
 const customHostInput = ref('')
 const hostDropdownOpen = ref(false)
@@ -339,6 +353,12 @@ function onHostAddKeydown(e) {
   }
 }
 
+function formatSize(bytes) {
+  if (!bytes) return ''
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(0) + ' MB'
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB'
+}
+
 function selectModel(name) {
   store.setSelectedModel(name)
   store.setCurrentModel(name)
@@ -416,6 +436,16 @@ function handleClearAll() {
   } else {
     store.clearAllData()
     confirmingClear.value = false
+  }
+}
+
+function handleClearConfig() {
+  if (!confirmingConfigClear.value) {
+    confirmingConfigClear.value = true
+    setTimeout(() => { confirmingConfigClear.value = false }, 4000)
+  } else {
+    store.clearConfigData()
+    confirmingConfigClear.value = false
   }
 }
 </script>
@@ -942,6 +972,25 @@ function handleClearAll() {
   color: var(--text-danger);
 }
 
+.model-select-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.model-select-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.model-select-meta span {
+  white-space: nowrap;
+}
+
 .model-add-row {
   display: flex;
   gap: 4px;
@@ -962,5 +1011,42 @@ function handleClearAll() {
 
 .model-add-input:focus {
   border-color: var(--primary-color);
+}
+
+/* Storage usage bar */
+.storage-usage {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg-gray);
+  border-radius: var(--radius-md);
+}
+
+.storage-usage-bar {
+  height: 8px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.storage-usage-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.storage-usage-fill.warning {
+  background: var(--warning-color, #f5a623);
+}
+
+.storage-usage-fill.danger {
+  background: var(--text-danger, #f5222d);
+}
+
+.storage-usage-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
 }
 </style>

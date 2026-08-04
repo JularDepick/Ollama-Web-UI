@@ -36,6 +36,14 @@
         <input type="text" class="theme-color-text" :value="codeTextColor"
           @input="onCodeTextText" @blur="onCodeTextBlur" @keydown="onCodeTextKeydown" placeholder="#333" spellcheck="false">
       </div>
+      <div class="theme-divider"></div>
+      <div class="theme-section-title">字体大小</div>
+      <div class="font-size-control">
+        <button class="font-size-btn" @click="decreaseFontSize" :disabled="fontSize <= 12">A-</button>
+        <span class="font-size-value">{{ fontSize }}px</span>
+        <button class="font-size-btn" @click="increaseFontSize" :disabled="fontSize >= 20">A+</button>
+        <button class="font-size-reset" @click="resetFontSize">重置</button>
+      </div>
     </div>
   </div>
 </template>
@@ -47,6 +55,35 @@ import { THEMES, STORAGE_KEYS } from '@/constants'
 
 const store = useChatStore()
 const colorInput = ref(store.customColor || '#1677ff')
+
+// Font size control
+const FONT_SIZE_KEY = 'ollama_font_size'
+const DEFAULT_FONT_SIZE = 15
+const fontSize = ref(Number(localStorage.getItem(FONT_SIZE_KEY)) || DEFAULT_FONT_SIZE)
+
+function applyFontSize(size) {
+  fontSize.value = size
+  localStorage.setItem(FONT_SIZE_KEY, String(size))
+  document.documentElement.style.setProperty('--msg-font-size', size + 'px')
+}
+
+function increaseFontSize() {
+  if (fontSize.value < 20) applyFontSize(fontSize.value + 1)
+}
+
+function decreaseFontSize() {
+  if (fontSize.value > 12) applyFontSize(fontSize.value - 1)
+}
+
+function resetFontSize() {
+  applyFontSize(DEFAULT_FONT_SIZE)
+}
+
+// Apply saved font size on mount
+const savedFontSize = localStorage.getItem(FONT_SIZE_KEY)
+if (savedFontSize) {
+  document.documentElement.style.setProperty('--msg-font-size', savedFontSize + 'px')
+}
 
 const customCodeBg = localStorage.getItem(STORAGE_KEYS.codeBg)
 const customCodeText = localStorage.getItem(STORAGE_KEYS.codeText)
@@ -238,5 +275,93 @@ watch(() => store.currentTheme, () => {
 }
 .theme-apply-btn:hover {
   background: var(--primary-hover);
+}
+
+/* Font size control */
+.font-size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.font-size-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-white);
+  color: var(--text-main);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.font-size-btn:hover:not(:disabled) {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.font-size-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.font-size-value {
+  font-size: 14px;
+  color: var(--text-main);
+  min-width: 40px;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.font-size-reset {
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-gray);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: auto;
+}
+
+.font-size-reset:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+/* Mobile bottom sheet */
+@media (max-width: 768px) {
+  .theme-selector {
+    right: 0;
+    left: 0;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 85vh;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-out, opacity 0.2s ease-out;
+  }
+
+  .theme-selector.open {
+    transform: translateY(0);
+    max-height: 85vh;
+  }
+
+  .theme-selector::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border-color);
+    border-radius: 2px;
+    margin: 8px auto;
+  }
 }
 </style>

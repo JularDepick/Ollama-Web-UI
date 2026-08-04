@@ -3,6 +3,8 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // 产物 HTML 使用相对路径引用资源（支持 file:// 直接打开或部署到子目录）
+  base: './',
   plugins: [
     vue(),
     VitePWA({
@@ -15,7 +17,7 @@ export default defineConfig({
         theme_color: '#1677ff',
         background_color: '#f5f7fa',
         display: 'standalone',
-        start_url: '/',
+        start_url: './',
         icons: [
           { src: 'pwa-192x192.svg', sizes: '192x192', type: 'image/svg+xml' },
           { src: 'pwa-512x512.svg', sizes: '512x512', type: 'image/svg+xml' },
